@@ -6,48 +6,51 @@
 # Default to auto-normalized line endings.
 * text=auto
 # Code
-*.cs 				text eol=crlf diff=csharp
-*.json 				eol=lf
-*.gitattributes 	eol=crlf
-*.gitignore			eol=crlf
-*.txt				text=auto eol=crlf
-ProjectSettings/ProjectVersion.txt text=auto eol=lf
-*.manifest			eol=lf
-*.mtl			eol=lf
-*.wlt			eol=lf
+*.cs									text eol=crlf diff=csharp
+*.json 									text eol=lf
+*.gitattributes 						text eol=crlf
+*.gitignore								text eol=crlf
+*.txt									text
+*.manifest								text eol=lf
+*.mtl									text eol=lf
+*.wlt									text eol=lf
+*.uss									text eol=lf
+*.shader								text eol=lf
+*.cginc									text eol=lf
 # Unity Text Assets
-*.meta                  unityyaml
-*.unity                 unityyaml
-*.asset                 unityyaml
-*.prefab                unityyaml
-*.mat                   unityyaml
-*.anim                  unityyaml
-*.controller            unityyaml
-*.overrideController    unityyaml
-*.physicMaterial        unityyaml
-*.physicsMaterial2D     unityyaml
-*.playable              unityyaml
-*.mask                  unityyaml
-*.brush                 unityyaml
-*.flare                 unityyaml
-*.fontsettings          unityyaml
-*.guiskin               unityyaml
-*.giparams              unityyaml
-*.renderTexture         unityyaml
-*.spriteatlas           unityyaml
-*.terrainlayer          unityyaml
-*.mixer                 unityyaml
-*.shadervariants        unityyaml
-*.preset                unityyaml
-*.lighting				unityyaml
-*.asmdef                -text diff
+*.meta									unityyaml
+*.unity									unityyaml
+*.asset									unityyaml
+*.prefab								unityyaml
+*.mat									unityyaml
+*.anim									unityyaml
+*.controller							unityyaml
+*.overrideController					unityyaml
+*.physicMaterial						unityyaml
+*.physicsMaterial2D						unityyaml
+*.playable								unityyaml
+*.mask									unityyaml
+*.brush									unityyaml
+*.flare									unityyaml
+*.fontsettings							unityyaml
+*.guiskin								unityyaml
+*.giparams								unityyaml
+*.renderTexture							unityyaml
+*.spriteatlas							unityyaml
+*.terrainlayer							unityyaml
+*.mixer									unityyaml
+*.shadervariants						unityyaml
+*.preset								unityyaml
+*.lighting								unityyaml
+*.signal								unityyaml
+*.asmdef								-text diff
 # Unity Binary Assets
-*.cubemap       		lfs
-*.unitypackage      	lfs
+*.cubemap	lfs
+*.unitypackage	lfs
 # Note: Unity terrain assets must have "-Terrain" suffix.
-*-[Tt]errain.asset  	-unityyaml lfs
+*-[Tt]errain.asset	-unityyaml lfs
 # Note: Unity navmesh assets must have "-NavMesh" suffix.
-*-[Nn]av[Mm]esh.asset   -unityyaml lfs
+*-[Nn]av[Mm]esh.asset	-unityyaml lfs
 # Image
 *.jpg       lfs
 *.jpeg      lfs
