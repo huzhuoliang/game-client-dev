@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Animations;
 using UnityEngine.Playables;
 
 namespace Timeline.Samples {
@@ -37,14 +38,14 @@ namespace Timeline.Samples {
         public override void OnPlayableCreate(Playable playable) {
             double speed = playable.GetSpeed();
             _defaultTimeScale = (float)speed;
-            Debug.LogError($"\t [DEBUG]\t OnPlayableCreate={_defaultTimeScale}");
+            // Debug.LogError($"\t [DEBUG]\t OnPlayableCreate={_defaultTimeScale}");
         }
 
         // Called when the playable is destroyed, typically when the timeline stops.
         public override void OnPlayableDestroy(Playable playable) {
             // Time.timeScale = _defaultTimeScale;
             playable.SetSpeed(_defaultTimeScale);
-            Debug.LogError($"\t [DEBUG]\t OnPlayableDestroy={_defaultTimeScale}");
+            // Debug.LogError($"\t [DEBUG]\t OnPlayableDestroy={_defaultTimeScale}");
         }
     }
 }
