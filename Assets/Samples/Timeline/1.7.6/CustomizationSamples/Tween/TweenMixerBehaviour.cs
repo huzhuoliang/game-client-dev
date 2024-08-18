@@ -1,22 +1,19 @@
 using UnityEngine;
 using UnityEngine.Playables;
 
-namespace Timeline.Samples
-{
+namespace Timeline.Samples {
     // The runtime instance of a Tween track. It is responsible for blending and setting
     // the final data on the transform binding.
-    public class TweenMixerBehaviour : PlayableBehaviour
-    {
-        static AnimationCurve s_DefaultCurve = AnimationCurve.Linear(0.0f, 0.0f, 1.0f, 1.0f);
+    public class TweenMixerBehaviour : PlayableBehaviour {
+        private static readonly AnimationCurve DefaultCurve = AnimationCurve.Linear(0.0f, 0.0f, 1.0f, 1.0f);
 
-        bool m_ShouldInitializeTransform = true;
-        Vector3 m_InitialPosition;
-        Quaternion m_InitialRotation;
+        private bool _shouldInitializeTransform = true;
+        private Vector3 _initialPosition;
+        private Quaternion _initialRotation;
 
         // Performs blend of position and rotation of all clips connected to a track mixer
         // The result is applied to the track binding's (playerData) transform.
-        public override void ProcessFrame(Playable playable, FrameData info, object playerData)
-        {
+        public override void ProcessFrame(Playable playable, FrameData info, object playerData) {
             Transform trackBinding = playerData as Transform;
 
             if (trackBinding == null)
@@ -33,8 +30,7 @@ namespace Timeline.Samples
 
             // Iterate on all mixer's inputs (ie each clip on the track)
             int inputCount = playable.GetInputCount();
-            for (int i = 0; i < inputCount; i++)
-            {
+            for (int i = 0; i < inputCount; i++) {
                 float inputWeight = playable.GetInputWeight(i);
                 if (inputWeight <= 0)
                     continue;
@@ -47,64 +43,54 @@ namespace Timeline.Samples
                 float tweenProgress = GetCurve(tweenInput).Evaluate(normalizedInputTime);
 
                 // calculate the position's progression along the curve according to the input's (clip) weight
-                if (tweenInput.shouldTweenPosition)
-                {
+                if (tweenInput.shouldTweenPosition) {
                     totalPositionWeight += inputWeight;
                     accumPosition += TweenPosition(tweenInput, tweenProgress, inputWeight);
                 }
 
                 // calculate the rotation's progression along the curve according to the input's (clip) weight
-                if (tweenInput.shouldTweenRotation)
-                {
+                if (tweenInput.shouldTweenRotation) {
                     totalRotationWeight += inputWeight;
                     accumRotation = TweenRotation(tweenInput, accumRotation, tweenProgress, inputWeight);
                 }
             }
 
             // Apply the final position and rotation values in the track binding
-            trackBinding.position = accumPosition + m_InitialPosition * (1.0f - totalPositionWeight);
-            trackBinding.rotation = accumRotation.Blend(m_InitialRotation, 1.0f - totalRotationWeight);
+            trackBinding.position = accumPosition + _initialPosition * (1.0f - totalPositionWeight);
+            trackBinding.rotation = accumRotation.Blend(_initialRotation, 1.0f - totalRotationWeight);
             trackBinding.rotation.Normalize();
         }
 
-        void InitializeIfNecessary(Transform transform)
-        {
-            if (m_ShouldInitializeTransform)
-            {
-                m_InitialPosition = transform.position;
-                m_InitialRotation = transform.rotation;
-                m_ShouldInitializeTransform = false;
-            }
+        private void InitializeIfNecessary(Transform transform) {
+            if (!_shouldInitializeTransform)
+                return;
+            _initialPosition = transform.position;
+            _initialRotation = transform.rotation;
+            _shouldInitializeTransform = false;
         }
 
-        Vector3 TweenPosition(TweenBehaviour tweenInput, float progress, float weight)
-        {
-            Vector3 startPosition = m_InitialPosition;
-            if (tweenInput.startLocation != null)
-            {
+        private Vector3 TweenPosition(TweenBehaviour tweenInput, float progress, float weight) {
+            Vector3 startPosition = _initialPosition;
+            if (tweenInput.startLocation != null) {
                 startPosition = tweenInput.startLocation.position;
             }
 
-            Vector3 endPosition = m_InitialPosition;
-            if (tweenInput.endLocation != null)
-            {
+            Vector3 endPosition = _initialPosition;
+            if (tweenInput.endLocation != null) {
                 endPosition = tweenInput.endLocation.position;
             }
 
             return Vector3.Lerp(startPosition, endPosition, progress) * weight;
         }
 
-        Quaternion TweenRotation(TweenBehaviour tweenInput, Quaternion accumRotation, float progress, float weight)
-        {
-            Quaternion startRotation = m_InitialRotation;
-            if (tweenInput.startLocation != null)
-            {
+        Quaternion TweenRotation(TweenBehaviour tweenInput, Quaternion accumRotation, float progress, float weight) {
+            Quaternion startRotation = _initialRotation;
+            if (tweenInput.startLocation != null) {
                 startRotation = tweenInput.startLocation.rotation;
             }
 
-            Quaternion endRotation = m_InitialRotation;
-            if (tweenInput.endLocation != null)
-            {
+            Quaternion endRotation = _initialRotation;
+            if (tweenInput.endLocation != null) {
                 endRotation = tweenInput.endLocation.rotation;
             }
 
@@ -112,16 +98,14 @@ namespace Timeline.Samples
             return accumRotation.Blend(desiredRotation.NormalizeSafe(), weight);
         }
 
-        static TweenBehaviour GetTweenBehaviour(Playable playable)
-        {
+        static TweenBehaviour GetTweenBehaviour(Playable playable) {
             ScriptPlayable<TweenBehaviour> tweenInput = (ScriptPlayable<TweenBehaviour>)playable;
             return tweenInput.GetBehaviour();
         }
 
-        static AnimationCurve GetCurve(TweenBehaviour tween)
-        {
+        static AnimationCurve GetCurve(TweenBehaviour tween) {
             if (tween == null || tween.curve == null)
-                return s_DefaultCurve;
+                return DefaultCurve;
             return tween.curve;
         }
     }
