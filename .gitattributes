@@ -16,6 +16,7 @@
 *.wlt									text eol=lf
 *.uss									text eol=lf
 *.shader								text eol=lf
+*.shadergraph							text eol=lf
 *.cginc									text eol=lf
 # Unity Text Assets
 *.meta									unityyaml

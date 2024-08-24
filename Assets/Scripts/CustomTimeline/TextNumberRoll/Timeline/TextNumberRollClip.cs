@@ -16,7 +16,7 @@ namespace CustomTimeline.TextNumberRoll {
         [HideInInspector]
         public double end;
 
-        public ClipCaps clipCaps => ClipCaps.Blending | ClipCaps.Extrapolation | ClipCaps.ClipIn;
+        public ClipCaps clipCaps => ClipCaps.Blending | ClipCaps.Extrapolation;
 
         public override Playable CreatePlayable(PlayableGraph graph, GameObject owner) {
             template.Start = start;

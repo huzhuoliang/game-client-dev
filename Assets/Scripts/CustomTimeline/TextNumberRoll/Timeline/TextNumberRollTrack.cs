@@ -3,11 +3,12 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.Playables;
 using UnityEngine.Timeline;
+using CustomTimeline.TextNumberRoll;
 
-namespace CustomTimeline.TextNumberRoll {
+namespace CustomTimeline {
     [TrackClipType(typeof(TextNumberRollClip))]
     [TrackColor(0.48f, 0.48f, 0.48f)]
-    [TrackBindingType(typeof(TextNumberRoll))]
+    [TrackBindingType(typeof(TextNumberRoll.TextNumberRoll))]
     public class TextNumberRollTrack : TrackAsset {
         public TextMeshProUGUI text;
 
