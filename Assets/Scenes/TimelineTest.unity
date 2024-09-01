@@ -849,6 +849,7 @@ GameObject:
   - component: {fileID: 1518548438}
   - component: {fileID: 1518548437}
   - component: {fileID: 1518548439}
+  - component: {fileID: 1518548440}
   m_Layer: 5
   m_Name: Text_TMP
   m_TagString: Untagged
@@ -994,6 +995,21 @@ MonoBehaviour:
     - rid: 4391787405921484803
       type: {class: DefaultFormatter, ns: CustomTimeline.TextNumberRoll, asm: Assembly-CSharp}
       data: 
+--- !u!114 &1518548440
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1518548435}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e52de21a22b6dd44c9cc19f810c65059, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Events:
+    m_Signals: []
+    m_Events: []
 --- !u!1 &1521596885
 GameObject:
   m_ObjectHideFlags: 0
