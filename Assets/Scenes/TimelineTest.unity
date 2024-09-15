@@ -781,6 +781,8 @@ GameObject:
   - component: {fileID: 1244571200}
   - component: {fileID: 1244571199}
   - component: {fileID: 1244571201}
+  - component: {fileID: 1244571202}
+  - component: {fileID: 1244571203}
   m_Layer: 0
   m_Name: MyTimeline
   m_TagString: Untagged
@@ -807,6 +809,8 @@ PlayableDirector:
     value: {fileID: 1521596886}
   - key: {fileID: -7632695171590007539, guid: 474d212838a5d1c41810d36c5e67895e, type: 2}
     value: {fileID: 1518548439}
+  - key: {fileID: -4577265095269034822, guid: 474d212838a5d1c41810d36c5e67895e, type: 2}
+    value: {fileID: 1244571202}
   m_ExposedReferences:
     m_References:
     - 04e7f42dba23f6245b860b1e62d6e418: {fileID: 0}
@@ -837,6 +841,65 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8de8fe2f3e594a7b9ea800d1531dc2cc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &1244571202
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1244571198}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e52de21a22b6dd44c9cc19f810c65059, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Events:
+    m_Signals:
+    - {fileID: 5020640479930102164}
+    - {fileID: 8054253853163802315}
+    m_Events:
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1244571198}
+          m_TargetAssemblyTypeName: UnityEngine.GameObject, UnityEngine
+          m_MethodName: 
+          m_Mode: 1
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1244571198}
+          m_TargetAssemblyTypeName: UnityEngine.GameObject, UnityEngine
+          m_MethodName: 
+          m_Mode: 1
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+--- !u!114 &1244571203
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1244571198}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 58d99c311ddb4f469cb57096c699980e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  timelineAsset: {fileID: 11400000, guid: 474d212838a5d1c41810d36c5e67895e, type: 2}
+  subAssets: []
 --- !u!1 &1518548435
 GameObject:
   m_ObjectHideFlags: 0
@@ -896,7 +959,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 0
+  m_text: 557
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -1363,6 +1426,30 @@ Camera:
   m_OcclusionCulling: 1
   m_StereoConvergence: 10
   m_StereoSeparation: 0.022
+--- !u!114 &5020640479930102164
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d6fa2d92fc1b3f34da284357edf89c3b, type: 3}
+  m_Name: signal
+  m_EditorClassIdentifier: 
+--- !u!114 &8054253853163802315
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d6fa2d92fc1b3f34da284357edf89c3b, type: 3}
+  m_Name: signal
+  m_EditorClassIdentifier: 
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

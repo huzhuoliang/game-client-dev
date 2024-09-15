@@ -1,10 +1,7 @@
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
-using System.Linq;
 using UnityEditor;
 using UnityEditor.Timeline;
 using UnityEditor.Timeline.Actions;
-using UnityEngine;
 using UnityEngine.Timeline;
 
 // ReSharper disable once CheckNamespace
