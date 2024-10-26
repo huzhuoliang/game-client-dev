@@ -427,6 +427,7 @@ MonoBehaviour:
   savePath: 
   bundleNameList:
   - b1.b1_1
+  - b2.b2_1
   bundleNames: []
 --- !u!1 &832575517
 GameObject:

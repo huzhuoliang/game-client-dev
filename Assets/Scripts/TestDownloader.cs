@@ -4,6 +4,8 @@ using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityEngine.Networking;
 using System;
+using System.IO;
+using Game.Util;
 
 [Serializable]
 public class TestDownloader : MonoBehaviour {
@@ -13,21 +15,22 @@ public class TestDownloader : MonoBehaviour {
 
     private string FullURL {
         get {
-            string t = buildTarget.ToString();
-            if (!url.EndsWith("/")) {
-                t = "/" + t;
+            if (url.EndsWith("/") || url.EndsWith("\\")) {
+                return url + buildTarget;
             }
 
-            return url + t;
+            return url + "/" + buildTarget;
         }
     }
 
     [LabelText("Target Platform")]
-    public BuildTarget buildTarget = BuildTarget.StandaloneWindows64;
+    public BuildTarget buildTarget;
 
     [SerializeField]
     [DisplayAsString]
     private string savePath = "";
+
+    private string FullSavePath => Path.Combine(savePath, "bundle", buildTarget.ToString());
 
     [SerializeField]
     [LabelText("AssetBundle Name List")]
@@ -47,8 +50,32 @@ public class TestDownloader : MonoBehaviour {
     [NonSerialized]
     private Dictionary<string, DownloadBytes> _downloadedBytes = new();
 
+    [NonSerialized]
+    private readonly List<UnityWebRequest> _requests = new();
+
     private void Awake() {
         savePath = Application.persistentDataPath;
+    }
+
+    private void OnDestroy() {
+        StopAllWebRequest();
+    }
+
+    [Button]
+    private void OpenSavePath() {
+        Util.OpenFolder(savePath);
+    }
+
+    private void StopAllWebRequest() {
+        foreach (UnityWebRequest request in _requests) {
+            if (!request.isDone) {
+                request.Abort();
+            }
+
+            request.Dispose();
+        }
+
+        _requests.Clear();
     }
 
     [DisableInEditorMode]
@@ -56,6 +83,7 @@ public class TestDownloader : MonoBehaviour {
     private void StartDownload() {
         bundleNames.Clear();
         _downloadedBytes.Clear();
+        StopAllWebRequest();
         Debug.Log($"Start download \"{FullURL}\"");
         foreach (string bundleName in bundleNameList) {
             _downloadedBytes.Add(bundleName, new DownloadBytes {
@@ -75,9 +103,9 @@ public class TestDownloader : MonoBehaviour {
     }
 
     private IEnumerator CoDownload(string bundleURL, string bundleName) {
-        string dir = bundleURL.EndsWith("/") ? bundleURL : bundleURL + "/";
-        UnityWebRequest webRequest = UnityWebRequestAssetBundle.GetAssetBundle(dir + bundleName);
-        webRequest.downloadHandler = new DownloadHandlerFile(savePath + bundleName);
+        UnityWebRequest webRequest = UnityWebRequestAssetBundle.GetAssetBundle(Path.Combine(bundleURL, bundleName));
+        _requests.Add(webRequest);
+        webRequest.downloadHandler = new DownloadHandlerFile(Path.Combine(FullSavePath, bundleName));
         webRequest.SendWebRequest();
         while (!webRequest.isDone) {
             UpdateDownloadedBytes(bundleName, webRequest.downloadedBytes.FormatByte(), webRequest.downloadProgress);
@@ -93,7 +121,7 @@ public class TestDownloader : MonoBehaviour {
         }
 
         try {
-            AssetBundle bundle = AssetBundle.LoadFromFile(savePath + bundleName);
+            AssetBundle bundle = AssetBundle.LoadFromFile(Path.Combine(FullSavePath, bundleName));
             string[] assetNames = bundle.GetAllAssetNames();
             foreach (string assetName in assetNames) {
                 bundleNames.Add(bundle.name + ": " + assetName);
