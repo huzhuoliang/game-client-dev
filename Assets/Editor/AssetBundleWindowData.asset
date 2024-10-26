@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: AssetBundleWindowData
   m_EditorClassIdentifier: 
   path: AssetBundles
-  buildAssetBundleOptions: 0
+  buildAssetBundleOptions: 1
   buildTarget: 19
   copyToStreamingAssets: 1
   openFolderAfterBuild: 1

@@ -1,15 +1,15 @@
 ManifestFileVersion: 0
-CRC: 3890758690
+CRC: 3294096650
 Hashes:
   AssetFileHash:
     serializedVersion: 2
-    Hash: 6a7fad4bb111024858a0012a70a0bdad
+    Hash: a875e4de51d38d473cd58b1dec8e3e61
   TypeTreeHash:
     serializedVersion: 2
-    Hash: 4587ef6f95f03cd9eb1b5942fca4ec1a
+    Hash: 792a9027a990ebb92237ecf96aed8ffe
   IncrementalBuildHash:
     serializedVersion: 2
-    Hash: 6a7fad4bb111024858a0012a70a0bdad
+    Hash: a875e4de51d38d473cd58b1dec8e3e61
 HashAppended: 0
 ClassTypes:
 - Class: 1
@@ -20,19 +20,19 @@ ClassTypes:
   Script: {instanceID: 0}
 - Class: 23
   Script: {instanceID: 0}
+- Class: 28
+  Script: {instanceID: 0}
 - Class: 33
   Script: {instanceID: 0}
 - Class: 43
   Script: {instanceID: 0}
 - Class: 48
   Script: {instanceID: 0}
-- Class: 65
-  Script: {instanceID: 0}
-- Class: 135
+- Class: 114
+  Script: {fileID: 11500000, guid: fcc304aae57817a48a04d208008a4ec5, type: 3}
+- Class: 115
   Script: {instanceID: 0}
 SerializeReferenceClassIdentifiers: []
 Assets:
-- Assets/Bundle/Test/prefab/Sphere2.prefab
 - Assets/Bundle/Test/prefab/Sphere.prefab
-Dependencies:
-- E:/WorkSpace/Unity/AssetBundleTest/AssetBundles/StandaloneWindows64/test_bundle/test2
+Dependencies: []

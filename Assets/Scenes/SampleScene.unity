@@ -423,10 +423,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   url: http://192.168.50.250:8084/Assets/
+  buildTarget: 0
   savePath: 
   bundleNameList:
-  - test_bundle/test1
-  - test_bundle/test2
+  - b1.b1_1
   bundleNames: []
 --- !u!1 &832575517
 GameObject:

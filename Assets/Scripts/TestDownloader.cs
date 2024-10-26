@@ -8,7 +8,22 @@ using System;
 [Serializable]
 public class TestDownloader : MonoBehaviour {
     [SerializeField]
+    [LabelText("URL")]
     private string url = "";
+
+    private string FullURL {
+        get {
+            string t = buildTarget.ToString();
+            if (!url.EndsWith("/")) {
+                t = "/" + t;
+            }
+
+            return url + t;
+        }
+    }
+
+    [LabelText("Target Platform")]
+    public BuildTarget buildTarget = BuildTarget.StandaloneWindows64;
 
     [SerializeField]
     [DisplayAsString]
@@ -29,8 +44,8 @@ public class TestDownloader : MonoBehaviour {
     [ShowInInspector]
     [DictionaryDrawerSettings(IsReadOnly = true, DisplayMode = DictionaryDisplayOptions.OneLine)]
     [LabelText("Downloaded Bytes")]
-    [DisplayAsString]
-    private Dictionary<string, string> _downloadedBytesDic = new();
+    [NonSerialized]
+    private Dictionary<string, DownloadBytes> _downloadedBytes = new();
 
     private void Awake() {
         savePath = Application.persistentDataPath;
@@ -40,24 +55,36 @@ public class TestDownloader : MonoBehaviour {
     [Button("下载")]
     private void StartDownload() {
         bundleNames.Clear();
-        _downloadedBytesDic.Clear();
-        Debug.Log("Start download");
+        _downloadedBytes.Clear();
+        Debug.Log($"Start download \"{FullURL}\"");
         foreach (string bundleName in bundleNameList) {
-            _downloadedBytesDic.Add(bundleName, "");
-            StartCoroutine(CoDownload(url, bundleName));
+            _downloadedBytes.Add(bundleName, new DownloadBytes {
+                    BundleName = bundleName,
+                    ByteCount = ""
+            });
+            StartCoroutine(CoDownload(FullURL, bundleName));
         }
     }
 
+    private void UpdateDownloadedBytes(string bundleName, string byteCount, float progress) {
+        if (!_downloadedBytes.TryGetValue(bundleName, out var c))
+            return;
+        c.ByteCount = byteCount;
+        c.Progress = progress;
+        _downloadedBytes[bundleName] = c;
+    }
+
     private IEnumerator CoDownload(string bundleURL, string bundleName) {
-        UnityWebRequest webRequest = UnityWebRequestAssetBundle.GetAssetBundle(bundleURL + bundleName);
+        string dir = bundleURL.EndsWith("/") ? bundleURL : bundleURL + "/";
+        UnityWebRequest webRequest = UnityWebRequestAssetBundle.GetAssetBundle(dir + bundleName);
         webRequest.downloadHandler = new DownloadHandlerFile(savePath + bundleName);
         webRequest.SendWebRequest();
         while (!webRequest.isDone) {
-            _downloadedBytesDic[bundleName] = webRequest.downloadedBytes.FormatByte();
+            UpdateDownloadedBytes(bundleName, webRequest.downloadedBytes.FormatByte(), webRequest.downloadProgress);
             yield return null;
         }
 
-        _downloadedBytesDic[bundleName] = webRequest.downloadedBytes.FormatByte();
+        UpdateDownloadedBytes(bundleName, webRequest.downloadedBytes.FormatByte(), webRequest.downloadProgress);
 
         Debug.Log($"Bundle \"{bundleName}\" download finished.");
         if (webRequest.result != UnityWebRequest.Result.Success) {
@@ -74,5 +101,22 @@ public class TestDownloader : MonoBehaviour {
         } catch (Exception e) {
             Debug.LogError($"加载AB时出错：{e}");
         }
+    }
+
+    public enum BuildTarget {
+        StandaloneWindows64,
+        IOS,
+        Android,
+    }
+
+    public struct DownloadBytes {
+        [DisplayAsString]
+        public string BundleName;
+
+        [DisplayAsString]
+        public string ByteCount;
+
+        [DisplayAsString]
+        public float Progress;
     }
 }
