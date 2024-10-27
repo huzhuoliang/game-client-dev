@@ -94,12 +94,22 @@ namespace DefaultNamespace {
             StartCoroutine(DownloadABUnit(_mainABUnit));
         }
 
-        private void DisposeAllABUnit() {
+        /// <summary>
+        /// 释放所有 AssetBundle
+        /// </summary>
+        /// <param name="includeMainABUnit">是否同时释放主包</param>
+        private void DisposeAllABUnit(bool includeMainABUnit = true) {
             foreach (ABUnit ab in _abUnits) {
                 ab.Dispose();
             }
 
             _abUnits.Clear();
+
+            // ReSharper disable once InvertIf
+            if (includeMainABUnit && _mainABUnit != null) {
+                _mainABUnit.Dispose();
+                _mainABUnit = null;
+            }
         }
 
         private IEnumerator DownloadABUnit(ABUnit abUnit) {

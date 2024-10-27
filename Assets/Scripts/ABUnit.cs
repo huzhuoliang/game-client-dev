@@ -103,9 +103,6 @@ namespace Game {
             if (IsLoaded)
                 return true;
             try {
-                // Load Manifest
-
-                // Load Bundle
                 _assetBundle = AssetBundle.LoadFromFile(FullSavePath);
                 string[] assetNames = _assetBundle.GetAllAssetNames();
                 foreach (string assetName in assetNames) {

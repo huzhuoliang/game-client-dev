@@ -6,6 +6,7 @@ using UnityEngine;
 using Application = UnityEngine.Device.Application;
 using Directory = System.IO.Directory;
 using File = System.IO.File;
+using Game;
 
 namespace Editor {
     public class AssetBundleWindow : OdinEditorWindow {
@@ -97,6 +98,13 @@ namespace Editor {
             Directory.CreateDirectory(outputPath);
             AssetBundleManifest manifest = BuildPipeline.BuildAssetBundles(outputPath, data.buildAssetBundleOptions, data.buildTarget);
 
+            if (manifest == null) {
+                Debug.LogError("Failed to build AssetBundle.");
+                return;
+            }
+
+            CreateAssetBundleInfoJson(manifest, outputPath);
+
             if (data.copyToStreamingAssets)
                 CopyFolderToStreamingAssets(data.path);
 
@@ -107,7 +115,35 @@ namespace Editor {
                 EditorUtility.RevealInFinder(revealPath);
 
             string fullOutputPath = Path.GetFullPath(revealPath);
-            Debug.Log($"AssetBundle build success. Path = \"{fullOutputPath}\"");
+            Debug.Log($"AssetBundle build success.\nPath: \"{fullOutputPath}\"\n");
+        }
+
+        /// <summary>
+        /// Write AssetBundle meta data to Json file
+        /// </summary>
+        /// <param name="manifest"></param>
+        /// <param name="outputPath">The path where the AssetBundle is saved，and also the path where the JSON file is output.</param>
+        /// <returns></returns>
+        private static bool CreateAssetBundleInfoJson(AssetBundleManifest manifest, string outputPath) {
+            if (manifest == null)
+                return false;
+            AssetBundleInfos infos = new();
+            foreach (string assetBundle in manifest.GetAllAssetBundles()) {
+                string bundlePath = Path.Combine(outputPath, assetBundle);
+                if (BuildPipeline.GetCRCForAssetBundle(bundlePath, out uint crc)) {
+                    infos.InfoList.Add(new AssetBundleInfoUnit {
+                            BundleName = assetBundle,
+                            CRC = crc,
+                    });
+                } else {
+                    Debug.Log($"AssetBundle \"{assetBundle}\" Get CRC Error.");
+                }
+            }
+
+            string json = JsonUtility.ToJson(infos, true);
+            string infoPath = Path.Combine(outputPath, "AssetBundleInfo.json");
+            File.WriteAllText(infoPath, json);
+            return true;
         }
 
         private static void CopyFolderToStreamingAssets(string path) {
