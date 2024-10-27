@@ -5,131 +5,143 @@ using UnityEngine;
 using UnityEngine.Networking;
 using System;
 using System.IO;
-using Game.Util;
+using UnityEngine.Serialization;
 
-[Serializable]
-public class TestDownloader : MonoBehaviour {
-    [SerializeField]
-    [LabelText("URL")]
-    private string url = "";
+namespace Game {
+    [Serializable]
+    public class TestDownloader : MonoBehaviour {
+        [SerializeField]
+        [LabelText("URL")]
+        private string url = "";
 
-    private string FullURL {
-        get {
-            if (url.EndsWith("/") || url.EndsWith("\\")) {
-                return url + buildTarget;
+        private string FullURL {
+            get {
+                if (url.EndsWith("/") || url.EndsWith("\\")) {
+                    return url + buildTarget;
+                }
+
+                return url + "/" + buildTarget;
             }
-
-            return url + "/" + buildTarget;
-        }
-    }
-
-    [LabelText("Target Platform")]
-    public BuildTarget buildTarget;
-
-    [SerializeField]
-    [DisplayAsString]
-    private string savePath = "";
-
-    private string FullSavePath => Path.Combine(savePath, "bundle", buildTarget.ToString());
-
-    [SerializeField]
-    [LabelText("AssetBundle Name List")]
-    private List<string> bundleNameList = new();
-
-
-    [SerializeField]
-    [ListDrawerSettings(IsReadOnly = true)]
-    [Searchable]
-    [DisplayAsString]
-    [LabelText("AssetBundles")]
-    private List<string> bundleNames = new();
-
-    [ShowInInspector]
-    [DictionaryDrawerSettings(IsReadOnly = true, DisplayMode = DictionaryDisplayOptions.OneLine)]
-    [LabelText("Downloaded Bytes")]
-    [NonSerialized]
-    private Dictionary<string, DownloadBytes> _downloadedBytes = new();
-
-    [NonSerialized]
-    private readonly List<UnityWebRequest> _requests = new();
-
-    private void Awake() {
-        savePath = Application.persistentDataPath;
-    }
-
-    private void OnDestroy() {
-        StopAllWebRequest();
-    }
-
-    [Button]
-    private void OpenSavePath() {
-        Util.OpenFolder(savePath);
-    }
-
-    private void StopAllWebRequest() {
-        foreach (UnityWebRequest request in _requests) {
-            if (!request.isDone) {
-                request.Abort();
-            }
-
-            request.Dispose();
         }
 
-        _requests.Clear();
-    }
+        [LabelText("Target Platform")]
+        public BuildTarget buildTarget;
 
-    [DisableInEditorMode]
-    [Button("下载")]
-    private void StartDownload() {
-        bundleNames.Clear();
-        _downloadedBytes.Clear();
-        StopAllWebRequest();
-        Debug.Log($"Start download \"{FullURL}\"");
-        foreach (string bundleName in bundleNameList) {
-            _downloadedBytes.Add(bundleName, new DownloadBytes {
-                    BundleName = bundleName,
+        [SerializeField]
+        [DisplayAsString]
+        private string savePath = "";
+
+        private string FullSavePath => Path.Combine(savePath, "bundle", buildTarget.ToString());
+
+        [SerializeField]
+        [LabelText("AssetBundle Name List")]
+        private List<string> bundleNameList = new();
+
+
+        [SerializeField]
+        [ListDrawerSettings(IsReadOnly = true)]
+        [Searchable]
+        [DisplayAsString]
+        [LabelText("AssetBundles")]
+        private List<string> bundleNames = new();
+
+        [ShowInInspector]
+        [DictionaryDrawerSettings(IsReadOnly = true, DisplayMode = DictionaryDisplayOptions.OneLine)]
+        [LabelText("Downloaded Bytes")]
+        [NonSerialized]
+        private Dictionary<string, DownloadBytes> _downloadedBytes = new();
+
+        [NonSerialized]
+        private readonly List<UnityWebRequest> _requests = new();
+
+        private void Awake() {
+            savePath = Application.persistentDataPath;
+        }
+
+        private void OnDestroy() {
+            StopAllWebRequest();
+        }
+
+        [Button]
+        private void OpenSavePath() {
+            Util.Util.OpenFolder(savePath);
+        }
+
+        private void StopAllWebRequest() {
+            foreach (UnityWebRequest request in _requests) {
+                if (!request.isDone) {
+                    request.Abort();
+                }
+
+                request.Dispose();
+            }
+
+            _requests.Clear();
+        }
+
+        [DisableInEditorMode]
+        [Button("下载")]
+        private void StartDownload() {
+            bundleNames.Clear();
+            _downloadedBytes.Clear();
+            StopAllWebRequest();
+            Debug.Log($"Start download \"{FullURL}\"");
+            foreach (string bundleName in bundleNameList) {
+                StartCoroutine(DownloadBundle(FullURL, bundleName));
+            }
+        }
+
+        private IEnumerator DownloadBundle(string bundleURL, string bundleName) {
+            string manifestName = bundleName + ".manifest";
+            yield return CoFileDownload(bundleURL, manifestName);
+            yield return CoFileDownload(bundleURL, bundleName);
+            LoadBundle(bundleName);
+        }
+
+        private void UpdateDownloadedBytes(string bundleName, string byteCount, float progress) {
+            if (!_downloadedBytes.TryGetValue(bundleName, out var c))
+                return;
+            c.ByteCount = byteCount;
+            c.Progress = progress;
+            _downloadedBytes[bundleName] = c;
+        }
+
+        private IEnumerator CoFileDownload(string fileURL, string fileName) {
+            _downloadedBytes.Add(fileName, new DownloadBytes {
+                    BundleName = fileName,
                     ByteCount = ""
             });
-            StartCoroutine(CoDownload(FullURL, bundleName));
-        }
-    }
-
-    private void UpdateDownloadedBytes(string bundleName, string byteCount, float progress) {
-        if (!_downloadedBytes.TryGetValue(bundleName, out var c))
-            return;
-        c.ByteCount = byteCount;
-        c.Progress = progress;
-        _downloadedBytes[bundleName] = c;
-    }
-
-    private IEnumerator CoDownload(string bundleURL, string bundleName) {
-        UnityWebRequest webRequest = UnityWebRequestAssetBundle.GetAssetBundle(Path.Combine(bundleURL, bundleName));
-        _requests.Add(webRequest);
-        webRequest.downloadHandler = new DownloadHandlerFile(Path.Combine(FullSavePath, bundleName));
-        webRequest.SendWebRequest();
-        while (!webRequest.isDone) {
-            UpdateDownloadedBytes(bundleName, webRequest.downloadedBytes.FormatByte(), webRequest.downloadProgress);
-            yield return null;
-        }
-
-        UpdateDownloadedBytes(bundleName, webRequest.downloadedBytes.FormatByte(), webRequest.downloadProgress);
-
-        Debug.Log($"Bundle \"{bundleName}\" download finished.");
-        if (webRequest.result != UnityWebRequest.Result.Success) {
-            Debug.LogError(webRequest.error);
-            yield break;
-        }
-
-        try {
-            AssetBundle bundle = AssetBundle.LoadFromFile(Path.Combine(FullSavePath, bundleName));
-            string[] assetNames = bundle.GetAllAssetNames();
-            foreach (string assetName in assetNames) {
-                bundleNames.Add(bundle.name + ": " + assetName);
+            
+            UnityWebRequest webRequest = UnityWebRequestAssetBundle.GetAssetBundle(Path.Combine(fileURL, fileName));
+            _requests.Add(webRequest);
+            webRequest.downloadHandler = new DownloadHandlerFile(Path.Combine(FullSavePath, fileName));
+            webRequest.SendWebRequest();
+            while (!webRequest.isDone) {
+                UpdateDownloadedBytes(fileName, webRequest.downloadedBytes.FormatByte(), webRequest.downloadProgress);
+                yield return null;
             }
-        } catch (Exception e) {
-            Debug.LogError($"加载AB时出错：{e}");
+
+            UpdateDownloadedBytes(fileName, webRequest.downloadedBytes.FormatByte(), webRequest.downloadProgress);
+
+            Debug.Log($"File \"{fileName}\" download finished.");
+            if (webRequest.result != UnityWebRequest.Result.Success) {
+                Debug.LogError(webRequest.error);
+            }
+        }
+
+        private void LoadBundle(string bundleName) {
+            try {
+                AssetBundle bundle = AssetBundle.LoadFromFile(Path.Combine(FullSavePath, bundleName));
+                string[] assetNames = bundle.GetAllAssetNames();
+                foreach (string assetName in assetNames) {
+                    bundleNames.Add(bundle.name + ": " + assetName);
+                }
+            } catch (Exception e) {
+                Debug.LogError($"Error When Loading Bundle \"{bundleName}\".\n {e}");
+            }
         }
     }
+
 
     public enum BuildTarget {
         StandaloneWindows64,

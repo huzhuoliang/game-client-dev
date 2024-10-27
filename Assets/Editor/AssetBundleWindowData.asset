@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   path: AssetBundles
   buildAssetBundleOptions: 1
-  buildTarget: 13
+  buildTarget: 19
   copyToStreamingAssets: 1
   openFolderAfterBuild: 1
   streamingAssetsPath: Assets/StreamingAssets

@@ -96,8 +96,6 @@ namespace Editor {
             FileUtil.DeleteFileOrDirectory(outputPath);
             Directory.CreateDirectory(outputPath);
             AssetBundleManifest manifest = BuildPipeline.BuildAssetBundles(outputPath, data.buildAssetBundleOptions, data.buildTarget);
-            string[] bundles = manifest.GetAllAssetBundles();
-            Debug.LogErrorFormat("打包结果：\n{0}", string.Join(",\n", bundles));
 
             if (data.copyToStreamingAssets)
                 CopyFolderToStreamingAssets(data.path);
