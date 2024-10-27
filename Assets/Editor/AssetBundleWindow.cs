@@ -60,7 +60,10 @@ namespace Editor {
             window.Show();
         }
 
-        [Button("Build")]
+        [Button("Build", ButtonSizes.Large)]
+        [GUIColor(0.4f, 0.8f, 0.4f)]
+        [PropertySpace(20f, 20f)]
+        [PropertyOrder(10000)]
         private void Build() {
             try {
                 AssetDatabase.StartAssetEditing();
@@ -90,6 +93,16 @@ namespace Editor {
             string path = data.path;
             FileUtil.DeleteFileOrDirectory(path);
             Directory.CreateDirectory(path);
+        }
+
+        [Button("Open Output Path")]
+        private void OpenOutputPath() {
+            string outputPath = Path.Join(data.path, data.buildTarget.ToString());
+            if (!outputPath.EndsWith("\\"))
+                outputPath += "\\";
+            if (Directory.Exists(outputPath)) {
+                EditorUtility.RevealInFinder(outputPath);
+            }
         }
 
         private void BuildAB() {
@@ -141,7 +154,7 @@ namespace Editor {
             }
 
             string json = JsonUtility.ToJson(infos, true);
-            string infoPath = Path.Combine(outputPath, "AssetBundleInfo.json");
+            string infoPath = Path.Combine(outputPath, MainABUnit.AssetBundleInfoFileName);
             File.WriteAllText(infoPath, json);
             return true;
         }

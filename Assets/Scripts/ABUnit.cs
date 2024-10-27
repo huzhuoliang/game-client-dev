@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using Sirenix.OdinInspector;
-using UnityEditor;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -12,32 +11,39 @@ namespace Game {
     public class ABUnit : IDisposable {
         [ShowInInspector]
         [DisplayAsString]
+        [PropertyOrder(1)]
         public string BundleName => _bundleName;
 
         [ShowInInspector]
         [DisplayAsString]
+        [PropertyOrder(2)]
         public string ManifestName => _bundleName + ".manifest";
 
         [ShowInInspector]
         [DisplayAsString]
         [LabelText("Download Status")]
+        [PropertyOrder(100)]
         public string DownloadedBytesStr => $"{DownloadedBytes.FormatByte()} ({DownloadedProgress * 100f:0.00}%)";
 
         [ShowInInspector]
         [DisplayAsString]
         [LabelText("Manifest Download Status")]
+        [PropertyOrder(101)]
         public string ManifestDownloadedBytesStr =>
                 $"{ManifestDownloadedBytes.FormatByte()} ({ManifestDownloadedProgress * 100f:0.00}%)";
 
         [ShowInInspector]
-        public bool IsDownloaded => DownloadedProgress >= 1f && ManifestDownloadedProgress >= 1f;
+        [PropertyOrder(200)]
+        public bool IsDownloaded => GetIsDownloadedInternal();
 
         [ProgressBar(0f, 1f, DrawValueLabel = false, ColorGetter = nameof(TotalProgressColorGetter))]
         [ShowInInspector]
         [HideLabel]
-        public float TotalProgress => Mathf.Min(DownloadedProgress, ManifestDownloadedProgress);
+        [PropertyOrder(299)]
+        public float TotalProgress => GetTotalProgressInternal();
 
         [ShowInInspector]
+        [PropertyOrder(300)]
         public bool IsLoaded => _isLoaded;
 
         public ulong DownloadedBytes => _webRequest?.downloadedBytes ?? 0;
@@ -52,14 +58,14 @@ namespace Game {
 
         public string DownloadError => _webRequest?.error ?? "";
 
-        public string FullURL => Path.Combine(_url, BundleName);
-        public string FullManifestURL => Path.Combine(_url, ManifestName);
-        public string FullSavePath => Path.Combine(_savePath, BundleName);
-        public string FullManifestSavePath => Path.Combine(_savePath, ManifestName);
+        public string FullURL => Path.Combine(URL, BundleName);
+        public string FullManifestURL => Path.Combine(URL, ManifestName);
+        public string FullSavePath => Path.Combine(SavePath, BundleName);
+        public string FullManifestSavePath => Path.Combine(SavePath, ManifestName);
 
         private string _bundleName;
-        private string _url;
-        private string _savePath;
+        protected string URL;
+        protected string SavePath;
         private UnityWebRequest _webRequest;
         private UnityWebRequest _manifestWebRequest;
         private bool _isLoaded;
@@ -68,10 +74,24 @@ namespace Game {
         private AssetBundle _assetBundle;
         private AssetBundleManifest _assetBundleManifest;
 
+        public ABUnit() {
+            URL = "";
+            _bundleName = "";
+            SavePath = "";
+        }
+
         public ABUnit(string url, string name, string savePath, string saveFileName = "") {
-            _url = url;
+            URL = url;
             _bundleName = name;
-            _savePath = savePath;
+            SavePath = savePath;
+        }
+
+        protected virtual bool GetIsDownloadedInternal() {
+            return DownloadedProgress >= 1f && ManifestDownloadedProgress >= 1f;
+        }
+
+        protected virtual float GetTotalProgressInternal() {
+            return Mathf.Min(DownloadedProgress, ManifestDownloadedProgress);
         }
 
         public bool StartDownload() {
@@ -82,11 +102,15 @@ namespace Game {
                 _manifestWebRequest = UnityWebRequestAssetBundle.GetAssetBundle(FullManifestURL);
                 _manifestWebRequest.downloadHandler = new DownloadHandlerFile(FullManifestSavePath);
                 _manifestWebRequest.SendWebRequest();
-                return true;
+                return OnStartDownload();
             } catch (Exception e) {
                 Debug.LogError($"Create Web Request Failed.\n{e}");
                 return false;
             }
+        }
+
+        protected virtual bool OnStartDownload() {
+            return true;
         }
 
         public bool IsDownloadDone() {
@@ -94,7 +118,11 @@ namespace Game {
                 throw new Exception("Please call StartDownload() before IsDownloadDone().");
             }
 
-            return _webRequest.isDone && _manifestWebRequest.isDone;
+            return _webRequest.isDone && _manifestWebRequest.isDone && IsSubClassDownloadDone();
+        }
+
+        public virtual bool IsSubClassDownloadDone() {
+            return true;
         }
 
         public bool Load() {
@@ -104,19 +132,15 @@ namespace Game {
                 return true;
             try {
                 _assetBundle = AssetBundle.LoadFromFile(FullSavePath);
-                string[] assetNames = _assetBundle.GetAllAssetNames();
-                foreach (string assetName in assetNames) {
-                    Debug.LogError($"{BundleName}: {assetName}");
-                }
 
-                _assetBundleManifest = _assetBundle.LoadAsset<AssetBundleManifest>("assetbundlemanifest");
-                Debug.LogError($"Manifest ({_assetBundleManifest.name}) 加载完成.");
-                string[] assets = _assetBundleManifest.GetAllAssetBundles();
-                Debug.LogErrorFormat("All AssetBundles:\n{0}", string.Join(",\n", assets));
-                foreach (string assetName in assetNames) {
-                    string[] deps = _assetBundleManifest.GetDirectDependencies(assetName);
-                    Debug.LogErrorFormat("{0} -> {{{1}}}", assetName, string.Join(",", deps));
-                }
+                //                _assetBundleManifest = _assetBundle.LoadAsset<AssetBundleManifest>("assetbundlemanifest");
+                //                Debug.LogError($"Manifest ({_assetBundleManifest.name}) 加载完成.");
+                //                string[] assets = _assetBundleManifest.GetAllAssetBundles();
+                //                Debug.LogErrorFormat("All AssetBundles:\n{0}", string.Join(",\n", assets));
+                //                foreach (string assetName in assetNames) {
+                //                    string[] deps = _assetBundleManifest.GetDirectDependencies(assetName);
+                //                    Debug.LogErrorFormat("{0} -> {{{1}}}", assetName, string.Join(",", deps));
+                //                }
 
                 return true;
             } catch (Exception e) {
@@ -137,7 +161,7 @@ namespace Game {
             _webRequest?.Dispose();
         }
 
-        private Color TotalProgressColorGetter(float value) {
+        protected Color TotalProgressColorGetter(float value) {
             // ReSharper disable once ConvertIfStatementToReturnStatement
             if (value >= 1f)
                 return new Color(30f / 255f, 132f / 255f, 73 / 255f);

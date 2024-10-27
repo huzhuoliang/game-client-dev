@@ -53,7 +53,7 @@ namespace DefaultNamespace {
         [HideReferenceObjectPicker]
         [BoxGroup("Main AssetBundle", centerLabel: true)]
         [HideIf("@this._mainABUnit == null")]
-        private ABUnit _mainABUnit;
+        private MainABUnit _mainABUnit;
 
         [NonSerialized]
         [ShowInInspector]
@@ -90,14 +90,14 @@ namespace DefaultNamespace {
 
         private void LoadMainAssetBundle() {
             DisposeAllABUnit();
-            _mainABUnit = new ABUnit(FullURL, buildTarget.ToString(), FullSavePath);
+            _mainABUnit = new MainABUnit(FullURL, buildTarget.ToString(), FullSavePath);
             StartCoroutine(DownloadABUnit(_mainABUnit));
         }
 
         /// <summary>
-        /// 释放所有 AssetBundle
+        /// Dispose All ABUnit instance
         /// </summary>
-        /// <param name="includeMainABUnit">是否同时释放主包</param>
+        /// <param name="includeMainABUnit">Dispose Main ABUnit or not</param>
         private void DisposeAllABUnit(bool includeMainABUnit = true) {
             foreach (ABUnit ab in _abUnits) {
                 ab.Dispose();
@@ -131,6 +131,13 @@ namespace DefaultNamespace {
             }
 
             abUnit.Load();
+            if (abUnit is MainABUnit mainABUnit) {
+                AfterLoadMainABUint(mainABUnit);
+            }
+        }
+
+        private static void AfterLoadMainABUint(MainABUnit abUnit) {
+            abUnit.LoadAssetBundleInfos();
         }
     }
 }
