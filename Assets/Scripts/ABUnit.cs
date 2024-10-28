@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -46,6 +48,22 @@ namespace Game {
         [PropertyOrder(300)]
         public bool IsLoaded => _isLoaded;
 
+        [ShowInInspector]
+        [PropertyOrder(400)]
+        private List<string> Dependencies {
+            get {
+                _dependenciesInspector.Clear();
+                foreach (ABUnit dep in _dependencies) {
+                    _dependenciesInspector.Add(dep.BundleName);
+                }
+
+                return _dependenciesInspector;
+            }
+        }
+
+        [NonSerialized]
+        private readonly List<string> _dependenciesInspector = new();
+
         public ulong DownloadedBytes => _webRequest?.downloadedBytes ?? 0;
 
         public float DownloadedProgress => _webRequest?.downloadProgress ?? 0f;
@@ -70,9 +88,11 @@ namespace Game {
         private UnityWebRequest _manifestWebRequest;
         private bool _isLoaded;
 
-
         private AssetBundle _assetBundle;
         private AssetBundleManifest _assetBundleManifest;
+        private readonly List<ABUnit> _dependencies = new();
+
+        private bool _isAsyncLoadingUnloading;
 
         public ABUnit() {
             URL = "";
@@ -142,11 +162,63 @@ namespace Game {
                 //                    Debug.LogErrorFormat("{0} -> {{{1}}}", assetName, string.Join(",", deps));
                 //                }
 
+                _isLoaded = true;
                 return true;
             } catch (Exception e) {
                 Debug.LogError($"Error When Loading Bundle \"{BundleName}\".\n {e}");
                 return false;
             }
+        }
+
+        public bool LoadAsync() {
+            if (!IsDownloaded)
+                return false;
+            if (IsLoaded)
+                return true;
+            try {
+                _assetBundle = AssetBundle.LoadFromFile(FullSavePath);
+
+                //                _assetBundleManifest = _assetBundle.LoadAsset<AssetBundleManifest>("assetbundlemanifest");
+                //                Debug.LogError($"Manifest ({_assetBundleManifest.name}) 加载完成.");
+                //                string[] assets = _assetBundleManifest.GetAllAssetBundles();
+                //                Debug.LogErrorFormat("All AssetBundles:\n{0}", string.Join(",\n", assets));
+                //                foreach (string assetName in assetNames) {
+                //                    string[] deps = _assetBundleManifest.GetDirectDependencies(assetName);
+                //                    Debug.LogErrorFormat("{0} -> {{{1}}}", assetName, string.Join(",", deps));
+                //                }
+
+                _isLoaded = true;
+                return true;
+            } catch (Exception e) {
+                Debug.LogError($"Error When Loading Bundle \"{BundleName}\".\n {e}");
+                return false;
+            }
+        }
+
+        public void Unload(bool unloadAllLoadedObjects = true) {
+            _assetBundle.Unload(unloadAllLoadedObjects);
+            _isLoaded = false;
+        }
+
+        public IEnumerator UnloadAsync(bool unloadAllLoadedObjects = true) {
+            while (_isAsyncLoadingUnloading) {
+                yield return null;
+            }
+
+            //            _isAsyncLoadingUnloading = true;
+            //            try {
+            //                AssetBundleUnloadOperation operation = _assetBundle.UnloadAsync(unloadAllLoadedObjects);
+            //                while (!operation.isDone) {
+            //                    yield return null;
+            //                }
+            //
+            //                _isLoaded = false;
+            //            } catch (Exception e) {
+            //                Debug.LogError($"Error when UnloadAsync.\n{e}");
+            //                throw;
+            //            } finally {
+            //                _isAsyncLoadingUnloading = false;
+            //            }
         }
 
         public void UnloadAssetBundle(bool unloadAllLoadedObjects = true) {

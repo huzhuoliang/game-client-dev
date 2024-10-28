@@ -21,7 +21,8 @@ namespace Game {
         [DisplayAsString]
         [LabelText("Infos Download Status")]
         [PropertyOrder(102)]
-        public string InfosDownloadedBytesStr => $"{InfosDownloadedBytes.FormatByte()} ({InfosDownloadedProgress * 100f:0.00}%)";
+        public string InfosDownloadedBytesStr =>
+                $"{InfosDownloadedBytes.FormatByte()} ({InfosDownloadedProgress * 100f:0.00}%)";
 
         public const string AssetBundleInfoFileName = "AssetBundleInfo.json";
 

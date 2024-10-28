@@ -64,6 +64,13 @@ namespace DefaultNamespace {
         [PropertyOrder(101)]
         private List<ABUnit> _abUnits = new();
 
+        [ShowInInspector]
+        [NonSerialized]
+        [InlineButton(nameof(LoadBundle))]
+        [HideLabel]
+        [HideInEditorMode]
+        [PropertyOrder(200)]
+        private string _bundleName;
 
         private void Awake() {
             _savePath = Application.persistentDataPath;
@@ -71,6 +78,12 @@ namespace DefaultNamespace {
 
         private void OnDestroy() {
             DisposeAllABUnit();
+        }
+
+        private void LoadBundle() {
+            ABUnit abUnit = new ABUnit(FullURL, _bundleName, FullSavePath);
+            _abUnits.Add(abUnit);
+            StartCoroutine(DownloadABUnit(abUnit));
         }
 
         [Button("Download")]

@@ -25,6 +25,6 @@ namespace Game {
         [ShowInInspector]
         [DisplayAsString]
         [HideLabel]
-        private string displayStr => $"{BundleName} [CRC: {CRC}]";
+        private string displayStr => $"{BundleName} [ CRC: {CRC} ]";
     }
 }
