@@ -81,12 +81,16 @@ namespace DefaultNamespace {
         }
 
         private void LoadBundle() {
-            ABUnit abUnit = new ABUnit(FullURL, _bundleName, FullSavePath);
+            if (string.IsNullOrEmpty(_bundleName))
+                return;
+            ABUnit abUnit = new ABUnit(FullURL, _bundleName, 0, FullSavePath);
             _abUnits.Add(abUnit);
             StartCoroutine(DownloadABUnit(abUnit));
         }
 
-        [Button("Download")]
+        [PropertySpace(10f)]
+        [Button("Download", ButtonSizes.Large)]
+        [GUIColor(0.4f, 0.8f, 0.4f)]
         [DisableInEditorMode]
         [PropertyOrder(1000)]
         private void Download() {

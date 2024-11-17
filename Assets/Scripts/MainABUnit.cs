@@ -35,7 +35,7 @@ namespace Game {
         public float InfosDownloadedProgress => _infosRequest?.downloadProgress ?? 0f;
 
         public MainABUnit(string url, string name, string savePath, string saveFileName = "")
-                : base(url, name, savePath, saveFileName) {
+                : base(url, name, 0, savePath, saveFileName) {
         }
 
         protected override bool GetIsDownloadedInternal() {
@@ -67,11 +67,11 @@ namespace Game {
         }
 
         public void LoadAssetBundleInfos() {
-            string infoPath = Path.Combine(SavePath, AssetBundleInfoFileName);
-            if (File.Exists(infoPath)) {
-                string json = File.ReadAllText(infoPath);
+            if (File.Exists(FullAssetBundleInfosSavePath)) {
+                string json = File.ReadAllText(FullAssetBundleInfosSavePath);
                 _infos = JsonUtility.FromJson<AssetBundleInfos>(json);
             } else {
+                Debug.LogError($"Load AssetBundleInfos failed. File not exist. path={FullAssetBundleInfosSavePath}");
                 _infos = null;
             }
         }

@@ -23,6 +23,11 @@ namespace Game {
 
         [ShowInInspector]
         [DisplayAsString]
+        [PropertyOrder(3)]
+        public uint CRC => _crc;
+
+        [ShowInInspector]
+        [DisplayAsString]
         [LabelText("Download Status")]
         [PropertyOrder(100)]
         public string DownloadedBytesStr => $"{DownloadedBytes.FormatByte()} ({DownloadedProgress * 100f:0.00}%)";
@@ -81,9 +86,11 @@ namespace Game {
         public string FullSavePath => Path.Combine(SavePath, BundleName);
         public string FullManifestSavePath => Path.Combine(SavePath, ManifestName);
 
-        private string _bundleName;
         protected string URL;
         protected string SavePath;
+
+        private uint _crc;
+        private string _bundleName;
         private UnityWebRequest _webRequest;
         private UnityWebRequest _manifestWebRequest;
         private bool _isLoaded;
@@ -92,6 +99,9 @@ namespace Game {
         private AssetBundleManifest _assetBundleManifest;
         private readonly List<ABUnit> _dependencies = new();
 
+        /// <summary>
+        /// Use same flag for both async loading and async unloading.
+        /// </summary>
         private bool _isAsyncLoadingUnloading;
 
         public ABUnit() {
@@ -100,9 +110,10 @@ namespace Game {
             SavePath = "";
         }
 
-        public ABUnit(string url, string name, string savePath, string saveFileName = "") {
+        public ABUnit(string url, string name, uint crc, string savePath, string saveFileName = "") {
             URL = url;
             _bundleName = name;
+            _crc = crc;
             SavePath = savePath;
         }
 
@@ -146,22 +157,15 @@ namespace Game {
         }
 
         public bool Load() {
-            if (!IsDownloaded)
+            if (!IsDownloaded) {
+                Debug.LogError("Load AssetBundle failed. Not downloaded.");
                 return false;
+            }
+
             if (IsLoaded)
                 return true;
             try {
                 _assetBundle = AssetBundle.LoadFromFile(FullSavePath);
-
-                //                _assetBundleManifest = _assetBundle.LoadAsset<AssetBundleManifest>("assetbundlemanifest");
-                //                Debug.LogError($"Manifest ({_assetBundleManifest.name}) 加载完成.");
-                //                string[] assets = _assetBundleManifest.GetAllAssetBundles();
-                //                Debug.LogErrorFormat("All AssetBundles:\n{0}", string.Join(",\n", assets));
-                //                foreach (string assetName in assetNames) {
-                //                    string[] deps = _assetBundleManifest.GetDirectDependencies(assetName);
-                //                    Debug.LogErrorFormat("{0} -> {{{1}}}", assetName, string.Join(",", deps));
-                //                }
-
                 _isLoaded = true;
                 return true;
             } catch (Exception e) {
@@ -176,17 +180,8 @@ namespace Game {
             if (IsLoaded)
                 return true;
             try {
+                // TODO: Load async
                 _assetBundle = AssetBundle.LoadFromFile(FullSavePath);
-
-                //                _assetBundleManifest = _assetBundle.LoadAsset<AssetBundleManifest>("assetbundlemanifest");
-                //                Debug.LogError($"Manifest ({_assetBundleManifest.name}) 加载完成.");
-                //                string[] assets = _assetBundleManifest.GetAllAssetBundles();
-                //                Debug.LogErrorFormat("All AssetBundles:\n{0}", string.Join(",\n", assets));
-                //                foreach (string assetName in assetNames) {
-                //                    string[] deps = _assetBundleManifest.GetDirectDependencies(assetName);
-                //                    Debug.LogErrorFormat("{0} -> {{{1}}}", assetName, string.Join(",", deps));
-                //                }
-
                 _isLoaded = true;
                 return true;
             } catch (Exception e) {
@@ -205,20 +200,23 @@ namespace Game {
                 yield return null;
             }
 
-            //            _isAsyncLoadingUnloading = true;
-            //            try {
-            //                AssetBundleUnloadOperation operation = _assetBundle.UnloadAsync(unloadAllLoadedObjects);
-            //                while (!operation.isDone) {
-            //                    yield return null;
-            //                }
-            //
-            //                _isLoaded = false;
-            //            } catch (Exception e) {
-            //                Debug.LogError($"Error when UnloadAsync.\n{e}");
-            //                throw;
-            //            } finally {
-            //                _isAsyncLoadingUnloading = false;
-            //            }
+            _isAsyncLoadingUnloading = true;
+            AssetBundleUnloadOperation operation;
+            try {
+                operation = _assetBundle.UnloadAsync(unloadAllLoadedObjects);
+            } catch (Exception) {
+                Debug.LogError("Exception when UnloadAsync:\n");
+                _isLoaded = false;
+                _isAsyncLoadingUnloading = false;
+                yield break;
+            }
+
+            while (!operation.isDone) {
+                yield return null;
+            }
+
+            _isLoaded = false;
+            _isAsyncLoadingUnloading = false;
         }
 
         public void UnloadAssetBundle(bool unloadAllLoadedObjects = true) {
@@ -235,10 +233,11 @@ namespace Game {
 
         protected Color TotalProgressColorGetter(float value) {
             // ReSharper disable once ConvertIfStatementToReturnStatement
-            if (value >= 1f)
+            if (value >= 1f) {
                 return new Color(30f / 255f, 132f / 255f, 73 / 255f);
-            else
+            } else {
                 return new Color(212f / 255f, 172f / 255f, 13f / 255f);
+            }
         }
     }
 }

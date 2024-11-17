@@ -10,12 +10,13 @@ namespace Game {
     public class AssetBundleInfos {
         [ListDrawerSettings(IsReadOnly = true)]
         [LabelText("All AssetBundle Names")]
+        [Searchable(FilterOptions = SearchFilterOptions.ISearchFilterableInterface)]
         public List<AssetBundleInfoUnit> InfoList = new();
     }
 
     [Serializable]
     [HideReferenceObjectPicker]
-    public class AssetBundleInfoUnit {
+    public class AssetBundleInfoUnit : ISearchFilterable {
         [HideInInspector]
         public string BundleName;
 
@@ -26,5 +27,9 @@ namespace Game {
         [DisplayAsString]
         [HideLabel]
         private string displayStr => $"{BundleName} [ CRC: {CRC} ]";
+
+        public bool IsMatch(string searchString) {
+            return displayStr.Contains(searchString);
+        }
     }
 }
