@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Game;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -18,10 +18,6 @@ namespace DefaultNamespace {
         [LabelText("Target Platform")]
         [PropertyOrder(2)]
         public BuildTarget buildTarget;
-
-        //        [LabelText("CRC")]
-        //        [PropertyOrder(2)]
-        //        public uint crc;
 
         [ShowInInspector]
         [PropertyOrder(3)]
@@ -46,47 +42,39 @@ namespace DefaultNamespace {
 
         [NonSerialized]
         [ShowInInspector]
-        [PropertyOrder(100)]
+        [PropertyOrder(101)]
+        [BoxGroup("Main AssetBundle 2", CenterLabel = true)]
         [HideInEditorMode]
         [HideLabel]
         [HideReferenceObjectPicker]
-        [BoxGroup("Main AssetBundle", centerLabel: true)]
-        [HideIf("@this._mainABUnit == null")]
-        private MainABUnit _mainABUnit;
-
-        [NonSerialized]
-        [ShowInInspector]
-        [PropertyOrder(101)]
-        [BoxGroup("Main AssetBundle 2", CenterLabel = true)]
-        // [HideInEditorMode]
-        [HideLabel]
-        [HideReferenceObjectPicker]
-        // [HideIf("@this._mainABUnit == null")]
         private MainAB _mainAB;
 
         [ShowInInspector]
-        [NonSerialized]
-        [InlineButton(nameof(LoadBundle))]
+        [ValueDropdown(nameof(GetAllAssetBundleInfoUnit), AppendNextDrawer = true)]
         [HideLabel]
-        [HideInEditorMode]
-        [PropertyOrder(200)]
-        private string _bundleName;
+        [InlineButton(nameof(OdinLoadAB), "Load")]
+        [PropertyOrder(102)]
+        private string _loadABName;
 
         private void Awake() {
             _savePath = Path.GetFullPath(Application.persistentDataPath);
         }
 
         private void OnDestroy() {
-            _mainABUnit?.Dispose();
+            _mainAB?.Dispose();
         }
 
-        private void LoadBundle() {
-            if (string.IsNullOrEmpty(_bundleName)) {
+        private IEnumerable GetAllAssetBundleInfoUnit() {
+            return _mainAB?.Infos?.InfoList?.Select(v => v.BundleName);
+        }
+
+        private void OdinLoadAB() {
+            if (_mainAB == null) {
+                Debug.LogError("_mainAB is null");
                 return;
             }
 
-            SubABUnit unit = _mainABUnit.GetSubABUnit(_bundleName);
-            StartCoroutine(unit.StartDownloadCoroutine());
+            StartCoroutine(_mainAB.LoadABAsync(_loadABName));
         }
 
         [PropertySpace(10f)]
@@ -101,11 +89,9 @@ namespace DefaultNamespace {
         private void LoadMainAssetBundle() {
             _mainAB = new MainAB(FullURL, FullSavePath);
             StartCoroutine(_mainAB.LoadInfosAsync());
-
-            // _mainABUnit = new MainABUnit(FullURL, buildTarget.ToString(), FullSavePath);
-            // StartCoroutine(DownloadABUnit(_mainABUnit));
         }
 
+        // TODO delete
         private IEnumerator DownloadABUnit(ABUnit abUnit) {
             if (!abUnit.StartDownload()) {
                 yield break;

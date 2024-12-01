@@ -1,11 +1,9 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using DefaultNamespace;
 using Sirenix.OdinInspector;
 using System.IO;
 using System.Linq;
-using TMPro;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -57,6 +55,8 @@ namespace Game {
         [HideIf("@this._infos == null")]
         private AssetBundleInfos _infos;
 
+        public AssetBundleInfos Infos => _infos;
+
         [NonSerialized]
         [ShowInInspector]
         [InlineProperty]
@@ -71,12 +71,6 @@ namespace Game {
         [LabelText("Download Status")]
         public string DownloadBytesStr => $"{DownloadBytes.FormatByte()} ({DownloadProgress * 100f:0.00}%)";
 
-        [ShowInInspector]
-        [ValueDropdown(nameof(GetAllAssetBundleInfoUnit), AppendNextDrawer = true)]
-        [HideLabel]
-        [InlineButton(nameof(OdinLoadAB), "Load")]
-        private string _loadABName;
-
         private UnityWebRequest _request;
         public ulong DownloadBytes => _request?.downloadedBytes ?? 0;
         public float DownloadProgress => _request?.downloadProgress ?? 0f;
@@ -84,6 +78,15 @@ namespace Game {
         public MainAB(string url, string savePath) {
             _url = url;
             _savePath = savePath;
+        }
+
+        public IEnumerator LoadABAsync(string abName) {
+            if (!_infos.TryGet(abName, out AssetBundleInfoUnit unit)) {
+                Debug.LogError($"Unknown AssetBundle name \"{abName}\"");
+                yield break;
+            }
+
+            Debug.LogError($"============ 加载 {unit}");
         }
 
         public IEnumerator LoadInfosAsync() {
@@ -132,18 +135,6 @@ namespace Game {
 
         public void Dispose() {
             _subABUnitList.Dispose();
-        }
-
-        private void OdinLoadAB() {
-            Debug.LogError($"============ Load {_loadABName}");
-        }
-
-        private IEnumerable GetAllAssetBundleInfoUnit() {
-            return _infos?.InfoList.Select(v => v.BundleName);
-
-            //            foreach (AssetBundleInfoUnit info in _infos.InfoList) {
-            //                yield return info;
-            //            }
         }
     }
 }

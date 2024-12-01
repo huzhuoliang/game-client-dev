@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
+// ReSharper disable ForeachCanBePartlyConvertedToQueryUsingAnotherGetEnumerator
+// ReSharper disable ForeachCanBeConvertedToQueryUsingAnotherGetEnumerator
 // ReSharper disable InconsistentNaming
 
 namespace Game {
@@ -12,6 +14,27 @@ namespace Game {
         [LabelText("All AssetBundle Names")]
         [Searchable(FilterOptions = SearchFilterOptions.ISearchFilterableInterface)]
         public List<AssetBundleInfoUnit> InfoList = new();
+
+        public bool Contains(string bundleName) {
+            foreach (AssetBundleInfoUnit info in InfoList) {
+                if (info.BundleName == bundleName)
+                    return true;
+            }
+
+            return false;
+        }
+
+        public bool TryGet(string bundleName, out AssetBundleInfoUnit unit) {
+            unit = default;
+            foreach (var info in InfoList) {
+                if (info.BundleName != bundleName)
+                    continue;
+                unit = info;
+                return true;
+            }
+
+            return false;
+        }
     }
 
     [Serializable]
