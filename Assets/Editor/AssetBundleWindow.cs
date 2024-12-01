@@ -64,6 +64,7 @@ namespace Editor {
         [GUIColor(0.4f, 0.8f, 0.4f)]
         [PropertySpace(20f, 20f)]
         [PropertyOrder(10000)]
+        [DisableInPlayMode]
         private void Build() {
             try {
                 AssetDatabase.StartAssetEditing();
@@ -143,20 +144,36 @@ namespace Editor {
             AssetBundleInfos infos = new();
             foreach (string assetBundle in manifest.GetAllAssetBundles()) {
                 string bundlePath = Path.Combine(outputPath, assetBundle);
-                if (BuildPipeline.GetCRCForAssetBundle(bundlePath, out uint crc)) {
-                    infos.InfoList.Add(new AssetBundleInfoUnit {
-                            BundleName = assetBundle,
-                            CRC = crc,
-                    });
-                } else {
+                ulong bytes = GetFileSizeBytes(bundlePath);
+                Hash128 hash = manifest.GetAssetBundleHash(assetBundle);
+
+                if (!BuildPipeline.GetCRCForAssetBundle(bundlePath, out uint crc)) {
                     Debug.Log($"AssetBundle \"{assetBundle}\" Get CRC Error.");
+                    continue;
                 }
+
+                infos.InfoList.Add(new AssetBundleInfoUnit {
+                        BundleName = assetBundle,
+                        CRC = crc,
+                        Hash = hash,
+                        Bytes = bytes,
+                });
             }
 
             string json = JsonUtility.ToJson(infos, true);
             string infoPath = Path.Combine(outputPath, MainABUnit.AssetBundleInfoFileName);
             File.WriteAllText(infoPath, json);
             return true;
+        }
+
+        private static ulong GetFileSizeBytes(string path) {
+            ulong size = 0;
+            FileInfo fileInfo = new FileInfo(path);
+            if (fileInfo.Exists) {
+                size = fileInfo.Length >= 0 ? (ulong)fileInfo.Length : 0;
+            }
+
+            return size;
         }
 
         private static void CopyFolderToStreamingAssets(string path) {

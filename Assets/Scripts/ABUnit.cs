@@ -18,12 +18,18 @@ namespace Game {
 
         [ShowInInspector]
         [DisplayAsString]
+        [LabelText("Hash")]
         [PropertyOrder(2)]
-        public string ManifestName => _bundleName + ".manifest";
+        public string HashString => Hash.ToString();
 
         [ShowInInspector]
         [DisplayAsString]
         [PropertyOrder(3)]
+        public string ManifestName => _bundleName + ".manifest";
+
+        [ShowInInspector]
+        [DisplayAsString]
+        [PropertyOrder(4)]
         public uint CRC => _crc;
 
         [ShowInInspector]
@@ -81,12 +87,13 @@ namespace Game {
 
         public string DownloadError => _webRequest?.error ?? "";
 
-        public string FullURL => Path.Combine(URL, BundleName);
+        public string FullURL => URL + "/" + BundleName;
         public string FullManifestURL => Path.Combine(URL, ManifestName);
         public string FullSavePath => Path.Combine(SavePath, BundleName);
         public string FullManifestSavePath => Path.Combine(SavePath, ManifestName);
 
         protected string URL;
+        protected Hash128 Hash;
         protected string SavePath;
 
         private uint _crc;
@@ -106,12 +113,14 @@ namespace Game {
 
         public ABUnit() {
             URL = "";
+            Hash = default;
             _bundleName = "";
             SavePath = "";
         }
 
-        public ABUnit(string url, string name, uint crc, string savePath, string saveFileName = "") {
+        public ABUnit(string url, Hash128 hash, string name, uint crc, string savePath, string saveFileName = "") {
             URL = url;
+            Hash = hash;
             _bundleName = name;
             _crc = crc;
             SavePath = savePath;
@@ -125,10 +134,48 @@ namespace Game {
             return Mathf.Min(DownloadedProgress, ManifestDownloadedProgress);
         }
 
+        public IEnumerator StartDownloadCoroutine() {
+            if (!StartDownload()) {
+                yield break;
+            }
+
+            while (!IsDownloadDone()) {
+                yield return null;
+            }
+
+            if (DownloadResult != UnityWebRequest.Result.Success) {
+                Debug.LogError(DownloadError);
+            }
+        }
+
         public bool StartDownload() {
             try {
-                _webRequest = UnityWebRequestAssetBundle.GetAssetBundle(FullURL);
-                _webRequest.downloadHandler = new DownloadHandlerFile(FullSavePath);
+                if (Caching.cacheCount > 0) {
+                    Debug.Log($"============ 1. 开始下载 当前缓存数：{Caching.cacheCount} 路径：{Caching.currentCacheForWriting.path}");
+                } else {
+                    Debug.Log($"============ 1. 开始下载 无缓存");
+                }
+
+                Debug.Log($"============ 2. 开始下载 目标文件夹 {FullSavePath}");
+                if (!Caching.IsVersionCached(FullURL, Hash)) {
+                    Debug.Log($"============ 3. 未缓存 {FullURL}:{Hash}");
+
+                    string today = DateTime.Today.ToString("d").Replace("/", "-");
+                    string fullCachePath = Path.Combine(SavePath, today).Replace("\\", "/");
+                    if (!Directory.Exists(fullCachePath)) {
+                        Directory.CreateDirectory(fullCachePath);
+                    }
+
+                    if (Caching.currentCacheForWriting.path != fullCachePath) {
+                        Cache newCache = Caching.AddCache(fullCachePath);
+                        if (newCache.valid) {
+                            Caching.currentCacheForWriting = newCache;
+                            Debug.Log($"============ 4. 更新当前缓存 {Caching.cacheCount}:{Caching.currentCacheForWriting.path}");
+                        }
+                    }
+                }
+
+                _webRequest = UnityWebRequestAssetBundle.GetAssetBundle(FullURL, Hash, _crc);
                 _webRequest.SendWebRequest();
                 _manifestWebRequest = UnityWebRequestAssetBundle.GetAssetBundle(FullManifestURL);
                 _manifestWebRequest.downloadHandler = new DownloadHandlerFile(FullManifestSavePath);
@@ -166,6 +213,10 @@ namespace Game {
                 return true;
             try {
                 _assetBundle = AssetBundle.LoadFromFile(FullSavePath);
+                string[] names = _assetBundle.GetAllAssetNames();
+                Debug.LogErrorFormat("============ Load {0}:\n{1}", FullSavePath, string.Join(",\n", names));
+                AssetBundleManifest manifest = _assetBundle.LoadAsset<AssetBundleManifest>("123");
+                manifest.GetAllAssetBundles();
                 _isLoaded = true;
                 return true;
             } catch (Exception e) {
@@ -234,7 +285,7 @@ namespace Game {
         protected Color TotalProgressColorGetter(float value) {
             // ReSharper disable once ConvertIfStatementToReturnStatement
             if (value >= 1f) {
-                return new Color(30f / 255f, 132f / 255f, 73 / 255f);
+                return new Color(30f / 255f, 132f / 255f, 73f / 255f);
             } else {
                 return new Color(212f / 255f, 172f / 255f, 13f / 255f);
             }

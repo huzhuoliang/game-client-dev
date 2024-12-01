@@ -1,15 +1,15 @@
 ManifestFileVersion: 0
-CRC: 3622018630
+CRC: 1073417847
 Hashes:
   AssetFileHash:
     serializedVersion: 2
-    Hash: f1f4d22b123e48c1ed67123959d9917f
+    Hash: fdc9769a0b5698acf1f8ecfdc05100aa
   TypeTreeHash:
     serializedVersion: 2
     Hash: 792a9027a990ebb92237ecf96aed8ffe
   IncrementalBuildHash:
     serializedVersion: 2
-    Hash: f1f4d22b123e48c1ed67123959d9917f
+    Hash: fdc9769a0b5698acf1f8ecfdc05100aa
 HashAppended: 0
 ClassTypes:
 - Class: 1
@@ -37,4 +37,4 @@ Assets:
 - Assets/Bundle/Test/m1_1.mat
 - Assets/Bundle/Test/prefab/Sphere1_1.prefab
 Dependencies:
-- E:/WorkSpace/Unity/AssetBundleTest/AssetBundles/StandaloneWindows64/b1.b1_2
+- E:/WorkSpace/Unity/AssetBundleTest/AssetBundles/Android/b1.b1_2

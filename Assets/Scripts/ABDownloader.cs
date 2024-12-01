@@ -19,22 +19,21 @@ namespace DefaultNamespace {
         [PropertyOrder(2)]
         public BuildTarget buildTarget;
 
+        //        [LabelText("CRC")]
+        //        [PropertyOrder(2)]
+        //        public uint crc;
+
         [ShowInInspector]
         [PropertyOrder(3)]
         [DisplayAsString]
         private string FullURL {
             get {
-                if (url.EndsWith("/") || url.EndsWith("\\")) {
-                    return url + buildTarget;
-                }
-
-                return url + "/" + buildTarget;
+                string u = url;
+                if (!u.EndsWith("/"))
+                    u += "/";
+                return u + buildTarget;
             }
         }
-
-        [SerializeField]
-        [PropertyOrder(4)]
-        private List<string> bundleNames = new();
 
         [NonSerialized]
         private string _savePath = "";
@@ -57,12 +56,13 @@ namespace DefaultNamespace {
 
         [NonSerialized]
         [ShowInInspector]
-        [ListDrawerSettings(IsReadOnly = true)]
-        [HideReferenceObjectPicker]
-        [LabelText("AssetBundle Unit List")]
-        [HideInEditorMode]
         [PropertyOrder(101)]
-        private List<ABUnit> _abUnits = new();
+        [BoxGroup("Main AssetBundle 2", CenterLabel = true)]
+        // [HideInEditorMode]
+        [HideLabel]
+        [HideReferenceObjectPicker]
+        // [HideIf("@this._mainABUnit == null")]
+        private MainAB _mainAB;
 
         [ShowInInspector]
         [NonSerialized]
@@ -73,19 +73,20 @@ namespace DefaultNamespace {
         private string _bundleName;
 
         private void Awake() {
-            _savePath = Application.persistentDataPath;
+            _savePath = Path.GetFullPath(Application.persistentDataPath);
         }
 
         private void OnDestroy() {
-            DisposeAllABUnit();
+            _mainABUnit?.Dispose();
         }
 
         private void LoadBundle() {
-            if (string.IsNullOrEmpty(_bundleName))
+            if (string.IsNullOrEmpty(_bundleName)) {
                 return;
-            ABUnit abUnit = new ABUnit(FullURL, _bundleName, 0, FullSavePath);
-            _abUnits.Add(abUnit);
-            StartCoroutine(DownloadABUnit(abUnit));
+            }
+
+            SubABUnit unit = _mainABUnit.GetSubABUnit(_bundleName);
+            StartCoroutine(unit.StartDownloadCoroutine());
         }
 
         [PropertySpace(10f)]
@@ -95,38 +96,14 @@ namespace DefaultNamespace {
         [PropertyOrder(1000)]
         private void Download() {
             LoadMainAssetBundle();
-            //            DisposeAllABUnit();
-            //            foreach (string bundleName in bundleNames) {
-            //                _abUnits.Add(new ABUnit(FullURL, bundleName, FullSavePath));
-            //            }
-            //
-            //            foreach (ABUnit ab in _abUnits) {
-            //                StartCoroutine(DownloadABUnit(ab));
-            //            }
         }
 
         private void LoadMainAssetBundle() {
-            DisposeAllABUnit();
-            _mainABUnit = new MainABUnit(FullURL, buildTarget.ToString(), FullSavePath);
-            StartCoroutine(DownloadABUnit(_mainABUnit));
-        }
+            _mainAB = new MainAB(FullURL, FullSavePath);
+            StartCoroutine(_mainAB.LoadInfosAsync());
 
-        /// <summary>
-        /// Dispose All ABUnit instance
-        /// </summary>
-        /// <param name="includeMainABUnit">Dispose Main ABUnit or not</param>
-        private void DisposeAllABUnit(bool includeMainABUnit = true) {
-            foreach (ABUnit ab in _abUnits) {
-                ab.Dispose();
-            }
-
-            _abUnits.Clear();
-
-            // ReSharper disable once InvertIf
-            if (includeMainABUnit && _mainABUnit != null) {
-                _mainABUnit.Dispose();
-                _mainABUnit = null;
-            }
+            // _mainABUnit = new MainABUnit(FullURL, buildTarget.ToString(), FullSavePath);
+            // StartCoroutine(DownloadABUnit(_mainABUnit));
         }
 
         private IEnumerator DownloadABUnit(ABUnit abUnit) {
@@ -147,7 +124,7 @@ namespace DefaultNamespace {
                 yield break;
             }
 
-            abUnit.Load();
+            // abUnit.Load();
             if (abUnit is MainABUnit mainABUnit) {
                 AfterLoadMainABUint(mainABUnit);
             }

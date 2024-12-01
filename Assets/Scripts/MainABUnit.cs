@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Linq;
+using DefaultNamespace;
 using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -8,6 +10,7 @@ using UnityEngine.Networking;
 // ReSharper disable ConvertToAutoPropertyWithPrivateSetter
 
 namespace Game {
+    [Serializable]
     public class MainABUnit : ABUnit {
         [NonSerialized]
         [ShowInInspector]
@@ -34,8 +37,15 @@ namespace Game {
 
         public float InfosDownloadedProgress => _infosRequest?.downloadProgress ?? 0f;
 
+        [NonSerialized]
+        [ShowInInspector]
+        [InlineProperty]
+        [HideReferenceObjectPicker]
+        [HideLabel]
+        private SubABUnitList _subABUnitList = new();
+
         public MainABUnit(string url, string name, string savePath, string saveFileName = "")
-                : base(url, name, 0, savePath, saveFileName) {
+                : base(url, new Hash128(), name, 0, savePath, saveFileName) {
         }
 
         protected override bool GetIsDownloadedInternal() {
@@ -74,6 +84,37 @@ namespace Game {
                 Debug.LogError($"Load AssetBundleInfos failed. File not exist. path={FullAssetBundleInfosSavePath}");
                 _infos = null;
             }
+        }
+
+        public bool IsABExists(string bundleName) {
+            if (_infos == null || _infos.InfoList.Count <= 0)
+                return false;
+            return _infos.InfoList.Any(info => info.BundleName.Equals(bundleName));
+        }
+
+        public bool TryGetABInfo(string bundleName, out AssetBundleInfoUnit infoUnit) {
+            infoUnit = null;
+            if (_infos == null || _infos.InfoList.Count <= 0)
+                return false;
+
+            // ReSharper disable once ForeachCanBePartlyConvertedToQueryUsingAnotherGetEnumerator
+            foreach (AssetBundleInfoUnit info in _infos.InfoList) {
+                if (info.BundleName != bundleName) continue;
+                infoUnit = info;
+                return true;
+            }
+
+            return false;
+        }
+
+        public SubABUnit GetSubABUnit(string bundleName) {
+            if (!TryGetABInfo(bundleName, out AssetBundleInfoUnit infoUnit))
+                return null;
+            if (_subABUnitList.TryGetValue(bundleName, out SubABUnit unit))
+                return unit;
+            SubABUnit abUnit = new SubABUnit(URL, infoUnit.Hash, infoUnit.BundleName, infoUnit.CRC, SavePath);
+            _subABUnitList.Add(bundleName, abUnit);
+            return abUnit;
         }
     }
 }

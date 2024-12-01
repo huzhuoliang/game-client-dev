@@ -552,8 +552,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   url: http://192.168.50.250:8084/Assets/
   buildTarget: 0
-  bundleNames:
-  - StandaloneWindows64
+  crc: 0
 --- !u!4 &1058555646
 Transform:
   m_ObjectHideFlags: 0

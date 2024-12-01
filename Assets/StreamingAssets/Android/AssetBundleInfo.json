@@ -2,29 +2,26 @@
     "InfoList": [
         {
             "BundleName": "b1.b1_1",
-            "Bytes": 242288,
-            "CRC": 3622018630,
+            "CRC": 1073417847,
             "Hash": {
                 "serializedVersion": "2",
-                "Hash": "f1f4d22b123e48c1ed67123959d9917f"
+                "Hash": "fdc9769a0b5698acf1f8ecfdc05100aa"
             }
         },
         {
             "BundleName": "b1.b1_2",
-            "Bytes": 242288,
-            "CRC": 13552884,
+            "CRC": 4095166243,
             "Hash": {
                 "serializedVersion": "2",
-                "Hash": "a21311e0de1c79220fd9a6d7e2a3a1ce"
+                "Hash": "c86cb96eadbc22335a1a82237ece42bc"
             }
         },
         {
             "BundleName": "b1.b1_3",
-            "Bytes": 242288,
-            "CRC": 2413706150,
+            "CRC": 3128639512,
             "Hash": {
                 "serializedVersion": "2",
-                "Hash": "c00afac6fe2e99bc0828a49fa2d1c253"
+                "Hash": "5ad0d39c0554ff97ab86ff3d78a5f44d"
             }
         }
     ]

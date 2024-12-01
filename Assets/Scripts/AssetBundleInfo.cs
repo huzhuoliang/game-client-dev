@@ -21,15 +21,25 @@ namespace Game {
         public string BundleName;
 
         [HideInInspector]
+        public ulong Bytes;
+
+        [HideInInspector]
         public uint CRC;
+
+        [HideInInspector]
+        public Hash128 Hash;
 
         [ShowInInspector]
         [DisplayAsString]
         [HideLabel]
-        private string displayStr => $"{BundleName} [ CRC: {CRC} ]";
+        private string displayStr => $"{BundleName} [ Size: {Bytes.FormatByte()} ] [ CRC: {CRC} ] [ Hash: {Hash} ]";
 
         public bool IsMatch(string searchString) {
             return displayStr.Contains(searchString);
+        }
+
+        public override string ToString() {
+            return displayStr;
         }
     }
 }
