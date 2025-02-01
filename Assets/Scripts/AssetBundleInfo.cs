@@ -25,7 +25,7 @@ namespace Game {
         }
 
         public bool TryGet(string bundleName, out AssetBundleInfoUnit unit) {
-            unit = default;
+            unit = null;
             foreach (var info in InfoList) {
                 if (info.BundleName != bundleName)
                     continue;

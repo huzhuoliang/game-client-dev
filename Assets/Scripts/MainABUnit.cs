@@ -113,7 +113,7 @@ namespace Game {
             if (_subABUnitList.TryGetValue(bundleName, out SubABUnit unit))
                 return unit;
             SubABUnit abUnit = new SubABUnit(URL, infoUnit.Hash, infoUnit.BundleName, infoUnit.CRC, SavePath);
-            _subABUnitList.Add(bundleName, abUnit);
+            _subABUnitList.Add(abUnit);
             return abUnit;
         }
     }

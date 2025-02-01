@@ -17,10 +17,10 @@ namespace EMCC.World {
 
         public void Awake() {
             ResetTransform();
-            InitWorldBlocks(Vector3Int.zero);
+            InitWorldBlocks();
         }
 
-        private void InitWorldBlocks(Vector3Int centerIndex) {
+        private void InitWorldBlocks() {
             for (int ix = -1; ix <= 1; ix++) {
                 for (int iy = -1; iy <= 1; iy++) {
                     for (int iz = -1; iz <= 1; iz++) {
@@ -44,7 +44,7 @@ namespace EMCC.World {
             try {
                 wb.Init(logicIndex, realIndex);
             } catch (Exception e) {
-                Debug.LogError($"WorldBlock \"{obj.name}\" init failed.");
+                Debug.LogError($"WorldBlock \"{obj.name}\" init failed.\n{e}");
             }
 
             _worldBlocks[logicIndex] = wb;

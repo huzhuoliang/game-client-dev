@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using DefaultNamespace;
 using Sirenix.OdinInspector;
 using System.IO;
-using System.Linq;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -81,12 +81,37 @@ namespace Game {
         }
 
         public IEnumerator LoadABAsync(string abName) {
+            if (_infos == null) {
+                Debug.LogError("Infos is null. Please load AssetBundleInfos before Load AssetBundle.");
+                yield break;
+            }
+
             if (!_infos.TryGet(abName, out AssetBundleInfoUnit unit)) {
                 Debug.LogError($"Unknown AssetBundle name \"{abName}\"");
                 yield break;
             }
 
-            Debug.LogError($"============ 加载 {unit}");
+            if (unit == null) {
+                Debug.LogError($"AssetBundleInfoUnit is null. name \"{abName}\"");
+                yield break;
+            }
+
+            yield return LoadAB(unit);
+        }
+
+        private IEnumerator LoadAB([NotNull] AssetBundleInfoUnit unit) {
+            if (unit == null) {
+                throw new ArgumentNullException(nameof(unit));
+            }
+
+            if (_subABUnitList.Contains(unit)) {
+                yield break;
+            }
+
+            SubABUnit subABUnit = new SubABUnit(URL, unit, SavePath);
+            _subABUnitList.Add(subABUnit);
+
+            // TODO Load
         }
 
         public IEnumerator LoadInfosAsync() {
@@ -105,11 +130,9 @@ namespace Game {
             if (!LoadABInfos()) {
                 Debug.LogError("LoadABInfos Failed.");
             }
-
-            Debug.Log("Load success.");
         }
 
-        public bool StartDownloadABInfos() {
+        private bool StartDownloadABInfos() {
             try {
                 _request = UnityWebRequestAssetBundle.GetAssetBundle(FullABInfosURL);
                 _request.downloadHandler = new DownloadHandlerFile(FullABInfosSavePath);
@@ -122,13 +145,24 @@ namespace Game {
         }
 
         public bool LoadABInfos() {
-            if (File.Exists(FullABInfosSavePath)) {
-                string json = File.ReadAllText(FullABInfosSavePath);
-                _infos = JsonUtility.FromJson<AssetBundleInfos>(json);
-                return true;
-            } else {
+            if (!File.Exists(FullABInfosSavePath)) {
                 Debug.LogError($"Load AssetBundleInfos failed. File not exist. path={FullABInfosSavePath}");
                 _infos = null;
+                return false;
+            }
+
+            string json = File.ReadAllText(FullABInfosSavePath);
+            if (json.Length <= 0) {
+                Debug.LogError($"AssetBundle info json file is empty. ({FullABInfosSavePath})");
+                return false;
+            }
+
+            try {
+                _infos = JsonUtility.FromJson<AssetBundleInfos>(json);
+                return true;
+            } catch (Exception e) {
+                _infos = null;
+                Debug.LogException(e);
                 return false;
             }
         }

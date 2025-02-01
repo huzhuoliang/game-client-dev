@@ -1,0 +1,16 @@
+ManifestFileVersion: 0
+CRC: 392512528
+AssetBundleManifest:
+  AssetBundleInfos:
+    Info_0:
+      Name: b1.b1_1
+      Dependencies:
+        Dependency_0: b1.b1_2
+    Info_1:
+      Name: b1.b1_2
+      Dependencies:
+        Dependency_0: b1.b1_3
+    Info_2:
+      Name: b1.b1_3
+      Dependencies:
+        Dependency_0: b1.b1_1

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using Game;
 using Sirenix.OdinInspector;
 
 namespace DefaultNamespace {
@@ -19,12 +21,20 @@ namespace DefaultNamespace {
             return _abUnitDic.ContainsKey(bundleName);
         }
 
-        public void Add(string bundleName, SubABUnit abUnit) {
-            if (abUnit == null || Contains(bundleName)) {
+        public bool Contains([NotNull] AssetBundleInfoUnit unit) {
+            if (unit == null) {
+                throw new ArgumentNullException(nameof(unit));
+            }
+
+            return Contains(unit.BundleName);
+        }
+
+        public void Add(SubABUnit abUnit) {
+            if (abUnit == null || Contains(abUnit.BundleName)) {
                 return;
             }
 
-            _abUnitDic[bundleName] = abUnit;
+            _abUnitDic[abUnit.BundleName] = abUnit;
             _abUnitList.Add(abUnit);
         }
 
@@ -37,6 +47,8 @@ namespace DefaultNamespace {
             foreach (SubABUnit ab in _abUnitList.Where(ab => !ReferenceEquals(ab, null))) {
                 ab.Dispose();
             }
+
+            _abUnitList.Clear();
         }
     }
 }
