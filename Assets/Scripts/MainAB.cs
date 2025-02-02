@@ -110,6 +110,7 @@ namespace Game {
 
             SubABUnit subABUnit = new SubABUnit(URL, unit, SavePath);
             _subABUnitList.Add(subABUnit);
+            yield return subABUnit.StartDownloadCoroutine();
 
             // TODO Load
         }

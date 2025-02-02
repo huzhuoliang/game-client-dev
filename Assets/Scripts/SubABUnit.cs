@@ -11,7 +11,7 @@ namespace DefaultNamespace {
         }
 
         public SubABUnit(string url, AssetBundleInfoUnit unit, string savePath, string saveFileName = "") :
-                base(url, unit.Hash, unit.BundleName, unit.CRC, savePath, saveFileName) {
+                base(url, Hash128.Parse(unit.Hash), unit.BundleName, unit.CRC, savePath, saveFileName) {
         }
     }
 }

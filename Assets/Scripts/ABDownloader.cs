@@ -91,30 +91,30 @@ namespace DefaultNamespace {
             StartCoroutine(_mainAB.LoadInfosAsync());
         }
 
-        // TODO delete
-        private IEnumerator DownloadABUnit(ABUnit abUnit) {
-            if (!abUnit.StartDownload()) {
-                yield break;
-            }
-
-            while (!abUnit.IsDownloadDone()) {
-                yield return null;
-#if UNITY_EDITOR
-                UnityEditor.EditorUtility.SetDirty(this);
-#endif
-            }
-
-            Debug.Log($"File \"{abUnit.BundleName}\" download finished.");
-            if (abUnit.DownloadResult != UnityWebRequest.Result.Success) {
-                Debug.LogError(abUnit.DownloadError);
-                yield break;
-            }
-
-            // abUnit.Load();
-            if (abUnit is MainABUnit mainABUnit) {
-                AfterLoadMainABUint(mainABUnit);
-            }
-        }
+//        // TODO delete
+//        private IEnumerator DownloadABUnit(ABUnit abUnit) {
+//            if (!abUnit.StartDownload()) {
+//                yield break;
+//            }
+//
+//            while (!abUnit.IsDownloadDone()) {
+//                yield return null;
+//#if UNITY_EDITOR
+//                UnityEditor.EditorUtility.SetDirty(this);
+//#endif
+//            }
+//
+//            Debug.Log($"File \"{abUnit.BundleName}\" download finished.");
+//            if (abUnit.DownloadResult != UnityWebRequest.Result.Success) {
+//                Debug.LogError(abUnit.DownloadError);
+//                yield break;
+//            }
+//
+//            // abUnit.Load();
+//            if (abUnit is MainABUnit mainABUnit) {
+//                AfterLoadMainABUint(mainABUnit);
+//            }
+//        }
 
         private static void AfterLoadMainABUint(MainABUnit abUnit) {
             abUnit.LoadAssetBundleInfos();

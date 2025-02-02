@@ -50,12 +50,15 @@ namespace Game {
         public uint CRC;
 
         [HideInInspector]
-        public Hash128 Hash;
+        public string Hash;
 
         [ShowInInspector]
         [DisplayAsString]
         [HideLabel]
-        private string displayStr => $"{BundleName} [ Size: {Bytes.FormatByte()} ] [ CRC: {CRC} ] [ Hash: {Hash} ]";
+        private string displayStr => $"{BundleName} "
+                                     + $"[ Size: {Bytes.FormatByte()} ] "
+                                     + $"[ CRC: {CRC} ] "
+                                     + $"[ Hash: {Hash} ] ";
 
         public bool IsMatch(string searchString) {
             return displayStr.Contains(searchString);

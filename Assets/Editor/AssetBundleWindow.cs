@@ -12,6 +12,7 @@ namespace Editor {
     public class AssetBundleWindow : OdinEditorWindow {
         [SerializeField]
         [InlineEditor(InlineEditorModes.GUIOnly, InlineEditorObjectFieldModes.Hidden)]
+        [PropertySpace(0f, 20f)]
         private AssetBundleWindowData data;
 
         private const string DataPath = "Assets/Editor/";
@@ -119,14 +120,16 @@ namespace Editor {
 
             CreateAssetBundleInfoJson(manifest, outputPath);
 
-            if (data.copyToStreamingAssets)
+            if (data.copyToStreamingAssets) {
                 CopyFolderToStreamingAssets(data.path);
+            }
 
             string revealPath = outputPath;
             if (!revealPath.EndsWith("\\"))
                 revealPath += "\\";
-            if (data.openFolderAfterBuild)
+            if (data.openFolderAfterBuild) {
                 EditorUtility.RevealInFinder(revealPath);
+            }
 
             string fullOutputPath = Path.GetFullPath(revealPath);
             Debug.Log($"AssetBundle build success.\nPath: \"{fullOutputPath}\"\n");
@@ -138,15 +141,16 @@ namespace Editor {
         /// <param name="manifest"></param>
         /// <param name="outputPath">The path where the AssetBundle is saved，and also the path where the JSON file is output.</param>
         /// <returns></returns>
-        private static bool CreateAssetBundleInfoJson(AssetBundleManifest manifest, string outputPath) {
-            if (manifest == null)
-                return false;
+        private static void CreateAssetBundleInfoJson(AssetBundleManifest manifest, string outputPath) {
+            if (manifest == null) {
+                return;
+            }
+
             AssetBundleInfos infos = new();
             foreach (string assetBundle in manifest.GetAllAssetBundles()) {
                 string bundlePath = Path.Combine(outputPath, assetBundle);
                 ulong bytes = GetFileSizeBytes(bundlePath);
                 Hash128 hash = manifest.GetAssetBundleHash(assetBundle);
-
                 if (!BuildPipeline.GetCRCForAssetBundle(bundlePath, out uint crc)) {
                     Debug.Log($"AssetBundle \"{assetBundle}\" Get CRC Error.");
                     continue;
@@ -155,7 +159,7 @@ namespace Editor {
                 infos.InfoList.Add(new AssetBundleInfoUnit {
                         BundleName = assetBundle,
                         CRC = crc,
-                        Hash = hash,
+                        Hash = hash.ToString(),
                         Bytes = bytes,
                 });
             }
@@ -163,7 +167,6 @@ namespace Editor {
             string json = JsonUtility.ToJson(infos, true);
             string infoPath = Path.Combine(outputPath, MainABUnit.AssetBundleInfoFileName);
             File.WriteAllText(infoPath, json);
-            return true;
         }
 
         private static ulong GetFileSizeBytes(string path) {

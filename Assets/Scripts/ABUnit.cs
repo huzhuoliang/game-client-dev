@@ -135,10 +135,7 @@ namespace Game {
         }
 
         public IEnumerator StartDownloadCoroutine() {
-            if (!StartDownload()) {
-                yield break;
-            }
-
+            yield return StartDownload();
             while (!IsDownloadDone()) {
                 yield return null;
             }
@@ -148,42 +145,47 @@ namespace Game {
             }
         }
 
-        public bool StartDownload() {
+        private IEnumerator StartDownload() {
+            Debug.Log("============ 1. 开始下载");
+            yield return PrepareCaching();
+            Debug.Log($"============ 2. 目标文件夹 {FullSavePath}");
+            if (!Caching.IsVersionCached(FullURL, Hash)) {
+                Debug.Log($"============ 3. 未缓存 {FullURL}:{Hash}");
+            } else {
+                Debug.Log($"============ 3. 已缓存 {FullURL}:{Hash}");
+            }
+
             try {
-                if (Caching.cacheCount > 0) {
-                    Debug.Log($"============ 1. 开始下载 当前缓存数：{Caching.cacheCount} 路径：{Caching.currentCacheForWriting.path}");
-                } else {
-                    Debug.Log($"============ 1. 开始下载 无缓存");
-                }
-
-                Debug.Log($"============ 2. 开始下载 目标文件夹 {FullSavePath}");
-                if (!Caching.IsVersionCached(FullURL, Hash)) {
-                    Debug.Log($"============ 3. 未缓存 {FullURL}:{Hash}");
-
-                    string today = DateTime.Today.ToString("d").Replace("/", "-");
-                    string fullCachePath = Path.Combine(SavePath, today).Replace("\\", "/");
-                    if (!Directory.Exists(fullCachePath)) {
-                        Directory.CreateDirectory(fullCachePath);
-                    }
-
-                    if (Caching.currentCacheForWriting.path != fullCachePath) {
-                        Cache newCache = Caching.AddCache(fullCachePath);
-                        if (newCache.valid) {
-                            Caching.currentCacheForWriting = newCache;
-                            Debug.Log($"============ 4. 更新当前缓存 {Caching.cacheCount}:{Caching.currentCacheForWriting.path}");
-                        }
-                    }
-                }
-
                 _webRequest = UnityWebRequestAssetBundle.GetAssetBundle(FullURL, Hash, _crc);
                 _webRequest.SendWebRequest();
                 _manifestWebRequest = UnityWebRequestAssetBundle.GetAssetBundle(FullManifestURL);
                 _manifestWebRequest.downloadHandler = new DownloadHandlerFile(FullManifestSavePath);
                 _manifestWebRequest.SendWebRequest();
-                return OnStartDownload();
+                OnStartDownload();
             } catch (Exception e) {
                 Debug.LogError($"Create Web Request Failed.\n{e}");
-                return false;
+            }
+        }
+
+        private IEnumerator PrepareCaching() {
+            string fullCachePath = Path.Combine(SavePath, "Cache1").Replace("\\", "/");
+            if (!Directory.Exists(fullCachePath)) {
+                Directory.CreateDirectory(fullCachePath);
+            }
+
+            WaitForEndOfFrame waitForEndOfFrame = new();
+            if (Caching.currentCacheForWriting.path != fullCachePath) {
+                Cache newCache = Caching.AddCache(fullCachePath);
+                while (!newCache.valid) {
+                    yield return waitForEndOfFrame;
+                }
+
+                Caching.currentCacheForWriting = newCache;
+                Debug.Log($"============ 4. 更新当前缓存 {Caching.cacheCount}:{Caching.currentCacheForWriting.path}");
+            }
+
+            while (!Caching.ready) {
+                yield return waitForEndOfFrame;
             }
         }
 

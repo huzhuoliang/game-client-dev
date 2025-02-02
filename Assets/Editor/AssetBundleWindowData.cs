@@ -13,6 +13,7 @@ namespace Editor {
         public BuildAssetBundleOptions buildAssetBundleOptions = BuildAssetBundleOptions.None;
 
         [LabelText("Build target")]
+        [OnValueChanged(nameof(OnBuildTargetChanged))]
         public BuildTarget buildTarget = BuildTarget.StandaloneWindows64;
 
         [LabelText("Copy to StreamingAssets")]
@@ -23,5 +24,8 @@ namespace Editor {
 
         [HideInInspector]
         public string streamingAssetsPath = "Assets/StreamingAssets";
+
+        private void OnBuildTargetChanged() {
+        }
     }
 }
