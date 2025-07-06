@@ -1,0 +1,25 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd" editor-extension-mode="True">
+    <Style src="project://database/Assets/Editor/MyToolKitWindow/MyUss.uss?fileID=7433441132597879392&amp;guid=1d53311739045dc499dd26b9df4bb346&amp;type=3#MyUss" />
+    <ui:VisualElement name="top" style="flex-grow: 0; -unity-background-scale-mode: stretch-to-fill; white-space: nowrap; flex-wrap: wrap;">
+        <uie:Toolbar name="Toolbar" style="margin-top: 1px; border-top-width: 1px; white-space: nowrap; flex-wrap: nowrap; align-self: auto; justify-content: flex-start; -unity-text-align: middle-left; transform-origin: center;">
+            <uie:ToolbarButton text="Test1" parse-escape-sequences="true" display-tooltip-when-elided="true" focusable="false" name="MyButton1" style="margin-left: 1px; -unity-text-align: middle-left; flex-shrink: 0;" />
+            <uie:ToolbarButton text="awrwerwerawer" parse-escape-sequences="true" display-tooltip-when-elided="true" name="ToolbarButton" focusable="false" style="margin-left: 0; margin-right: 0; -unity-text-align: middle-left; border-left-width: 0; flex-shrink: 0;" />
+            <uie:ToolbarToggle focusable="false" label="1asdfawer" value="false" style="margin-left: 0; -unity-text-align: middle-center; border-left-width: 0; justify-content: space-around; flex-shrink: 0;" />
+            <uie:ToolbarMenu tabindex="-1" parse-escape-sequences="true" display-tooltip-when-elided="true" style="border-left-width: 0; flex-shrink: 0;" />
+            <uie:ToolbarPopupSearchField focusable="true" style="border-right-width: 0; border-top-width: 0; border-bottom-width: 0; border-left-width: 0; border-top-left-radius: 3px; border-top-right-radius: 3px; border-bottom-right-radius: 3px; border-bottom-left-radius: 3px; flex-shrink: 1;" />
+            <uie:ToolbarSpacer style="flex-grow: 1; width: auto;" />
+            <uie:ToolbarButton text="Refresh" parse-escape-sequences="true" display-tooltip-when-elided="true" focusable="false" name="RefreshButton" style="align-items: auto; flex-direction: column; left: auto; right: auto; justify-content: flex-start; align-self: auto; flex-shrink: 0;" />
+        </uie:Toolbar>
+    </ui:VisualElement>
+    <ui:VisualElement name="mid" style="flex-grow: 1; flex-direction: row; align-items: flex-start; align-self: auto; width: auto; height: auto; justify-content: space-around; border-left-color: rgb(0, 0, 0); border-right-color: rgb(0, 0, 0); border-top-color: rgb(0, 0, 0); border-bottom-color: rgb(0, 0, 0); border-top-width: 0; border-right-width: 0; border-bottom-width: 1px; border-left-width: 0; margin-right: 0; margin-left: 0; padding-right: 4px; padding-left: 4px;">
+        <ui:ListView focusable="true" name="LeftListView" style="flex-grow: 1; width: 200px; border-right-width: 1px; margin-right: 0; border-right-color: rgb(0, 0, 0); border-top-left-radius: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; border-bottom-left-radius: 0; border-left-color: rgb(0, 0, 0); border-top-color: rgb(0, 0, 0); border-bottom-color: rgb(0, 0, 0); margin-top: 0; margin-bottom: 0; margin-left: 0; max-width: 200px; height: 100%;" />
+        <ui:VisualElement name="right" style="flex-grow: 1; padding-top: 4px; padding-right: 4px; padding-bottom: 4px; padding-left: 4px;">
+            <ui:Label tabindex="-1" text="物体信息" parse-escape-sequences="true" display-tooltip-when-elided="true" style="font-size: 22px; -unity-font-style: normal; margin-top: 0; margin-right: 0; margin-bottom: 4px; margin-left: 0; -unity-font: initial; border-bottom-color: rgba(0, 0, 0, 0.5); border-bottom-width: 1px;" />
+            <ui:Foldout text="Foldout" style="background-color: rgba(255, 255, 255, 0.03); border-top-width: 1px; border-right-width: 1px; border-bottom-width: 1px; border-left-width: 1px; border-left-color: rgba(0, 0, 0, 0.8); border-right-color: rgba(0, 0, 0, 0.8); border-top-color: rgba(0, 0, 0, 0.8); border-bottom-color: rgba(0, 0, 0, 0.8); border-top-left-radius: 5px; border-top-right-radius: 5px; border-bottom-right-radius: 5px; border-bottom-left-radius: 5px; padding-top: 5px; padding-bottom: 5px;">
+                <ui:TextField picking-mode="Ignore" label="Name" class="PropField" />
+                <ui:Vector3Field label="Position" class="PropField" />
+            </ui:Foldout>
+        </ui:VisualElement>
+    </ui:VisualElement>
+    <ui:Button text="确认" parse-escape-sequences="true" display-tooltip-when-elided="true" style="margin-right: 6px; margin-bottom: 6px; margin-top: 6px;" />
+</ui:UXML>

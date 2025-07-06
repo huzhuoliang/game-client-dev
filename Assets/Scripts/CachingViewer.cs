@@ -8,6 +8,10 @@ namespace DefaultNamespace {
         private int Count => Caching.cacheCount;
 
         [ShowInInspector]
+        [DisplayAsString]
+        private bool Ready => Caching.ready;
+
+        [ShowInInspector]
         [BoxGroup("Current")]
         [DisplayAsString]
         private string Index => Caching.cacheCount <= 0 ? "" : Caching.currentCacheForWriting.index.ToString();
@@ -16,7 +20,6 @@ namespace DefaultNamespace {
         [BoxGroup("Current")]
         [DisplayAsString]
         private string Path => Caching.cacheCount <= 0 ? "" : Caching.currentCacheForWriting.path;
-
 
         [ShowInInspector]
         [DisplayAsString]

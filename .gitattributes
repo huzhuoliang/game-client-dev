@@ -14,11 +14,12 @@
 *.manifest								text eol=lf
 *.mtl									text eol=lf
 *.wlt									text eol=lf
-*.uss									text eol=lf
+*.uss									text eol=crlf
 *.shader								text eol=lf
 *.shadergraph							text eol=lf
 *.cginc									text eol=lf
 *.DotSettings							text eol=lf
+Assets/Scripts/proto/*.cs				text eol=lf
 # Unity Text Assets
 *.meta									unityyaml
 *.unity									unityyaml

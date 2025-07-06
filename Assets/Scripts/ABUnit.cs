@@ -146,9 +146,8 @@ namespace Game {
         }
 
         private IEnumerator StartDownload() {
-            Debug.Log("============ 1. 开始下载");
+            Debug.Log($"============ 1. 开始下载 {FullSavePath}");
             yield return PrepareCaching();
-            Debug.Log($"============ 2. 目标文件夹 {FullSavePath}");
             if (!Caching.IsVersionCached(FullURL, Hash)) {
                 Debug.Log($"============ 3. 未缓存 {FullURL}:{Hash}");
             } else {
@@ -181,7 +180,6 @@ namespace Game {
                 }
 
                 Caching.currentCacheForWriting = newCache;
-                Debug.Log($"============ 4. 更新当前缓存 {Caching.cacheCount}:{Caching.currentCacheForWriting.path}");
             }
 
             while (!Caching.ready) {

@@ -117,31 +117,16 @@ namespace Game {
 
         public IEnumerator LoadInfosAsync() {
             if (_infos == null) {
-                if (!StartDownloadABInfos()) {
-                    Debug.LogError("Start Download Failed.");
-                    yield break;
-                }
-
-                WaitForEndOfFrame waitForEndOfFrame = new();
-                while (!_request.isDone) {
-                    yield return waitForEndOfFrame;
+                _request = UnityWebRequestAssetBundle.GetAssetBundle(FullABInfosURL);
+                _request.downloadHandler = new DownloadHandlerFile(FullABInfosSavePath);
+                yield return _request.SendWebRequest();
+                if (!_request.isDone) {
+                    Debug.LogError($"Download Failed. url:{FullABInfosURL} savePath:{FullABInfosSavePath}");
                 }
             }
 
             if (!LoadABInfos()) {
                 Debug.LogError("LoadABInfos Failed.");
-            }
-        }
-
-        private bool StartDownloadABInfos() {
-            try {
-                _request = UnityWebRequestAssetBundle.GetAssetBundle(FullABInfosURL);
-                _request.downloadHandler = new DownloadHandlerFile(FullABInfosSavePath);
-                _request.SendWebRequest();
-                return true;
-            } catch (Exception e) {
-                Debug.LogError($"Create web request for AssetBundleInfos failed.\n{e}");
-                return false;
             }
         }
 
