@@ -18,6 +18,10 @@ namespace Net.Proto {
             _handlersDic[handler.MessageType] = new MessageHandlerWrapper<T>(handler);
         }
 
+        public void UnRegisterAll() {
+            _handlersDic.Clear();
+        }
+
         public bool TryGetHandler(MessageType messageType, out IMessageHandlerWrapper wrapper) {
             return _handlersDic.TryGetValue(messageType, out wrapper);
         }

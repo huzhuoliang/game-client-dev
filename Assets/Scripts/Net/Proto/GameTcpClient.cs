@@ -1,14 +1,12 @@
 using System;
 using System.Buffers;
 using System.IO;
-using System.Linq;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using GameServerServices.MessageType;
 using Google.Protobuf;
-using Net.Tcp;
 using UnityEngine;
 
 namespace Net.Proto {
@@ -35,8 +33,6 @@ namespace Net.Proto {
 
         private const int MAX_BODY_SIZE = 1024 * 1024; // 1 MB
 
-        private bool _init;
-
         private TcpClient _client;
         private NetworkStream _stream;
         private CancellationTokenSource _cts;
@@ -45,19 +41,37 @@ namespace Net.Proto {
 
         private readonly ArrayPool<byte> _bufferPool = ArrayPool<byte>.Shared;
 
-        public GameTcpClient SetAddr(string addr) {
-            _addr = addr;
-            return this;
+        public bool Connected {
+            get {
+                TcpClient client = _client;
+                try {
+                    if (client?.Client == null) return false;
+
+                    Socket socket = client.Client;
+                    return !(socket.Poll(1, SelectMode.SelectRead) && socket.Available == 0);
+                } catch {
+                    return false;
+                }
+            }
         }
 
-        public GameTcpClient SetPort(int port) {
-            _port = port;
-            return this;
-        }
+        public bool IsStart { get; private set; }
 
-        public void Init() {
+        private bool _isClientClosing;
+
+        private bool _hasClosed; // 确保 OnClose 事件只被调用一次
+
+        public event Action OnClose;
+
+        private void Init() {
+            if (IsStart) {
+                return;
+            }
+
             RegisterAll();
-            _init = true;
+            IsStart = true;
+            _isClientClosing = false;
+            _hasClosed = false;
         }
 
         private static void RegisterAll() {
@@ -67,6 +81,10 @@ namespace Net.Proto {
             /* TODO 调用自动生成的类来注册 */
             // MessageHandlerRegistry.Instance.Register(new TcpHelloWorldHandler());
 #endif
+        }
+
+        private static void UnRegisterAll() {
+            MessageHandlerRegistry.Instance.UnRegisterAll();
         }
 
         private static void RegisterAllByReflection() {
@@ -90,36 +108,100 @@ namespace Net.Proto {
                     MethodInfo registerMethod = typeof(MessageHandlerRegistry).GetMethod("Register");
                     registerMethod = registerMethod?.MakeGenericMethod(interfaceType.GenericTypeArguments[0]);
                     registerMethod?.Invoke(MessageHandlerRegistry.Instance, new[] { handlerInstance });
-                    Debug.Log($"[AutoRegister] Registered {type.Name}");
+                    // Debug.Log($"[AutoRegister] Registered {type.Name}");
                 }
             }
         }
 
-        public async Task StartConnectionAsync() {
-            if (!_init) {
+        private CancellationTokenSource _attemptConnectCts;
+        private CancellationTokenSource _connectTimeoutCts;
+
+        public async Task StartConnectionAsync(string addr, int port, int timeoutMs = 5000, int retryDelayMs = 1000, int maxAttempts = 10) {
+            Init();
+            if (!IsStart) {
                 return;
             }
 
-            Debug.LogError("Start connection");
-            _client = new TcpClient();
-            await _client.ConnectAsync(_addr, _port);
-            if (_client.Connected) {
+            _attemptConnectCts = new CancellationTokenSource();
+            bool success = false;
+            for (int i = 0; i < maxAttempts && !_attemptConnectCts.IsCancellationRequested; i++) {
+                _connectTimeoutCts = new CancellationTokenSource(timeoutMs);
+                success = await TryConnectOnce(_connectTimeoutCts.Token, addr, port);
+                if (success) {
+                    _addr = addr;
+                    _port = port;
+                    Debug.LogFormat("Connect {0}:{1} success", addr, port);
+                    break;
+                }
+
+                Debug.LogFormat("Connect {0}:{1} attempt {2} failed", addr, port, i + 1);
+
+                try {
+                    await Task.Delay(retryDelayMs, _attemptConnectCts.Token);
+                } catch (OperationCanceledException) {
+                    Debug.LogFormat("Connect {0}:{1} attempt {2} canceled", addr, port, i + 1);
+                }
+            }
+
+            if (!success) {
+                Debug.LogErrorFormat("Connect {0}:{1} attempt {2} times all failed", addr, port, maxAttempts);
+                Close();
+            }
+        }
+
+        private async Task<bool> TryConnectOnce(CancellationToken token, string addr, int port) {
+            try {
+                _client = new TcpClient();
+                Task connectTask = _client.ConnectAsync(addr, port);
+                Task delayTask = Task.Delay(Timeout.Infinite, token);
+                Task finished = await Task.WhenAny(connectTask, delayTask);
+                if (finished != connectTask || !_client.Connected) {
+                    _client.Close();
+                    return false;
+                }
+
                 _stream = _client.GetStream();
                 _cts = new CancellationTokenSource();
                 _ = ListenLoopAsync(_cts.Token);
                 _ = ParseLoopAsync(_cts.Token);
+                return true;
+            } catch (OperationCanceledException) {
+                Debug.LogError("Connect cancelled by user");
+                return false;
+            } catch (Exception ex) {
+                Debug.LogErrorFormat("Connect attempt failed: {0}", ex.Message);
+                return false;
             }
-
-            Debug.LogError("Connection success");
         }
 
-        public bool Connected => _client?.Connected ?? false;
-
         public void Close() {
-            _cts?.Cancel();
+            _isClientClosing = true;
+            UnRegisterAll();
+            CloseTokenSource(ref _cts);
+            CloseTokenSource(ref _connectTimeoutCts);
+            CloseTokenSource(ref _attemptConnectCts);
             _stream?.Close();
             _client?.Close();
-            _init = false;
+            IsStart = false;
+
+            InvokeOnClose();
+        }
+
+        private void InvokeOnClose() {
+            if (_hasClosed) {
+                return;
+            }
+
+            _hasClosed = true;
+            Debug.LogFormat("Connect {0}:{1} closed", _addr, _port);
+            OnClose?.Invoke();
+        }
+
+
+        private static void CloseTokenSource(ref CancellationTokenSource cts) {
+            cts?.Cancel();
+            cts?.Dispose();
+            cts = null;
         }
 
         public void SendMessage(ushort msgType, IMessage message) {
@@ -140,13 +222,36 @@ namespace Net.Proto {
 
         private async Task ListenLoopAsync(CancellationToken ct) {
             byte[] temp = new byte[1024];
-            while (!ct.IsCancellationRequested) {
-                int read = await _stream.ReadAsync(temp, 0, temp.Length, ct);
-                if (read == 0) {
-                    throw new IOException("Disconnected");
-                }
+            try {
+                while (!ct.IsCancellationRequested) {
+                    int read = await _stream.ReadAsync(temp, 0, temp.Length, ct);
+                    if (read == 0) {
+                        throw new IOException("Disconnected");
+                    }
 
-                _ringBufferStream.Push(temp, 0, read);
+                    _ringBufferStream.Push(temp, 0, read);
+                }
+            } catch (OperationCanceledException) {
+                // 连接结束: 主动断开
+            } catch (IOException e) {
+                if (_isClientClosing) {
+                    // 连接结束: 主动断开
+                } else if (e.Message.Equals("Disconnected")) {
+                    // 连接结束: 服务器断开连接
+                    Close();
+                } else {
+                    // 连接结束
+                    Debug.LogErrorFormat("连接结束: {0}", e);
+                }
+            } catch (Exception e) {
+                // 连接异常
+                Debug.LogErrorFormat("连接异常: {0}", e);
+            } finally {
+                // 连接结束
+                // Debug.LogError("============ 连接结束");
+                _isClientClosing = false;
+
+                InvokeOnClose();
             }
         }
 
