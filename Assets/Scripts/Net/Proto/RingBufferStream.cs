@@ -33,7 +33,6 @@ public class RingBufferStream {
         _dataAvailable.Release(length);
     }
 
-    // ReSharper disable once MemberCanBePrivate.Global
     public async Task<byte> ReadByteAsync(CancellationToken ct) {
         await _dataAvailable.WaitAsync(ct);
 
@@ -43,7 +42,32 @@ public class RingBufferStream {
         return value;
     }
 
-    public async Task ReadBytesAsync(byte[] buffer, int offset, uint count, CancellationToken ct) {
+    public async Task PeekBytesAsync(byte[] buffer, int offset, int count, CancellationToken ct) {
+        if (count <= 0) {
+            return;
+        }
+
+        if (count > _capacity) {
+            throw new ArgumentOutOfRangeException(nameof(count), "Peek count exceeds buffer capacity.");
+        }
+
+        while (_count < count) {
+            await _dataAvailable.WaitAsync(ct);
+        }
+
+        int firstPart = Math.Min(count, _capacity - _readPos);
+        Array.Copy(_buffer, _readPos, buffer, offset, firstPart);
+        int remaining = count - firstPart;
+        if (remaining > 0) {
+            Array.Copy(_buffer, 0, buffer, offset = firstPart, remaining);
+        }
+    }
+
+    public async Task ReadBytesAsync(byte[] buffer, int offset, int count, CancellationToken ct) {
+        if (count <= 0) {
+            return;
+        }
+
         for (int i = 0; i < count; i++) {
             buffer[offset + i] = await ReadByteAsync(ct);
         }

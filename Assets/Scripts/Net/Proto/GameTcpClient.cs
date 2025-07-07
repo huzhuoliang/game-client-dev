@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Game.Util;
 using GameServerServices.MessageType;
 using Google.Protobuf;
 using UnityEngine;
@@ -14,7 +15,7 @@ namespace Net.Proto {
         private const int MAGIC_NUMBER_SIZE = 4;
         private const int TYPE_SIZE = 2;
         private const int LENGTH_SIZE = 4;
-        private const int CRC_SIZE = 4;
+        // private const int CRC_SIZE = 4;
 
         private const uint MAGIC_NUMBER = 0xCAFEBABE;
 
@@ -28,9 +29,7 @@ namespace Net.Proto {
         /// <summary>
         /// [Magic] [Type] [Length] [CRC32] [Body]
         /// </summary>
-        private const int HEADER_SIZE = MAGIC_NUMBER_SIZE + TYPE_SIZE + LENGTH_SIZE; /* TODO Add CRC32 */
-        // private const int HEADER_SIZE2 = MAGIC_NUMBER_SIZE + TYPE_SIZE + LENGTH_SIZE + CRC_SIZE;
-
+        // private const int HEADER_SIZE = MAGIC_NUMBER_SIZE + TYPE_SIZE + LENGTH_SIZE;
         private const int MAX_BODY_SIZE = 1024 * 1024; // 1 MB
 
         private TcpClient _client;
@@ -134,12 +133,12 @@ namespace Net.Proto {
                     break;
                 }
 
-                Debug.LogFormat("Connect {0}:{1} attempt {2} failed", addr, port, i + 1);
+                Debug.LogFormat("Connect {0}:{1} attempt {2}/{3} failed", addr, port, i + 1, maxAttempts);
 
                 try {
                     await Task.Delay(retryDelayMs, _attemptConnectCts.Token);
                 } catch (OperationCanceledException) {
-                    Debug.LogFormat("Connect {0}:{1} attempt {2} canceled", addr, port, i + 1);
+                    Debug.LogFormat("Connect {0}:{1} attempt {2}/{3} canceled", addr, port, i + 1, maxAttempts);
                 }
             }
 
@@ -281,24 +280,31 @@ namespace Net.Proto {
         private async Task ParseOther(CancellationToken ct) {
             ushort msgType = await _ringBufferStream.ReadUint16(ct);
             MessageType messageType = (MessageType)msgType;
-            uint length = await _ringBufferStream.ReadUint32(ct);
+            int length = (int)await _ringBufferStream.ReadUint32(ct);
             if (length > MAX_BODY_SIZE) {
                 Debug.LogErrorFormat("Length too large: {0}", length);
                 return;
             }
 
-            byte[] dataBuffer = _bufferPool.Rent((int)length);
+            byte[] dataBuffer = _bufferPool.Rent(length);
 
             try {
                 await _ringBufferStream.ReadBytesAsync(dataBuffer, 0, length, ct);
 
-                if (!MessageHandlerRegistry.Instance.TryGetHandler(messageType, out var wrapper)) {
-                    Debug.LogErrorFormat("[Client] Unknown messageType={0}", messageType);
+                uint crc = await _ringBufferStream.ReadUint32(ct);
+                uint expiredCrc = Crc32.Compute(dataBuffer, 0, length);
+                if (expiredCrc != crc) {
+                    Debug.LogErrorFormat("[Client] CRC check failed: messageType={0}", messageType);
+                    return;
+                }
+
+                if (!MessageHandlerRegistry.Instance.TryGetHandler(messageType, out IMessageHandlerWrapper wrapper)) {
+                    Debug.LogErrorFormat("[Client] No message handler: messageType={0}", messageType);
                     return;
                 }
 
                 IMessage msg = wrapper.CreateMessage();
-                msg.MergeFrom(new CodedInputStream(dataBuffer, 0, (int)length));
+                msg.MergeFrom(new CodedInputStream(dataBuffer, 0, length));
                 wrapper.Handle(msg);
             } catch (Exception e) {
                 Debug.LogException(e);
