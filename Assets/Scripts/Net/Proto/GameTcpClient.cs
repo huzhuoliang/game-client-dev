@@ -214,6 +214,9 @@ namespace Net.Proto {
             mem.Write(msgTypeBytes, 0, 2);
             mem.Write(lengthBytes, 0, 4);
             mem.Write(bodyBytes, 0, bodyBytes.Length);
+            uint crc = Crc32.Compute(bodyBytes, 0, bodyBytes.Length);
+            byte[] crcBytes = crc.GetBytesBigEndian();
+            mem.Write(crcBytes, 0, 4);
 
             byte[] payload = mem.ToArray();
             _stream.Write(payload, 0, payload.Length);
