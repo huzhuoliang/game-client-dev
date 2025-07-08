@@ -1,9 +1,10 @@
 using GameServerServices.HelloWorld;
+using GameServerServices.MessageType;
 using Net.Proto;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
-namespace Net {
+namespace Net.Mono {
     public class GameClient : MonoBehaviour {
         [SerializeField]
         private string addr = "192.168.50.16";
@@ -12,53 +13,53 @@ namespace Net {
         private int port = 50052;
 
         [ShowInInspector]
-        private bool IsClientStart => _tcpClient.IsStart;
+        private bool IsClientStart => TcpClient.IsStart;
 
         [ShowInInspector]
-        private bool IsClientConnected => _tcpClient.Connected;
+        private bool IsClientConnected => TcpClient.Connected;
 
-        private readonly GameTcpClient _tcpClient = new();
+        public GameTcpClient TcpClient { get; } = new();
 
         private void Start() {
-            _tcpClient.OnClose += OnClose;
+            TcpClient.OnClose += OnClose;
         }
 
 
         [HorizontalGroup("Conn")]
         [Button(ButtonSizes.Large)]
-        [EnableIf("@!this._tcpClient.IsStart")]
+        [EnableIf("@!this.TcpClient.IsStart")]
         [GUIColor(0.5f, 1.0f, 0.5f)]
         private void Connect() {
-            if (_tcpClient.Connected) {
+            if (TcpClient.Connected) {
                 return;
             }
 
-            _ = _tcpClient.StartConnectionAsync(addr, port);
+            _ = TcpClient.StartConnectionAsync(addr, port);
         }
 
         [HorizontalGroup("Conn")]
         [Button(ButtonSizes.Large)]
-        [EnableIf("@this._tcpClient.IsStart")]
+        [EnableIf("@this.TcpClient.IsStart")]
         [GUIColor(1.0f, 0.5f, 0.5f)]
         private void Disconnect() {
-            _tcpClient.Close();
+            TcpClient.Close();
         }
 
         private void OnDestroy() {
-            _tcpClient?.Close();
+            TcpClient?.Close();
         }
 
         [PropertySpace(SpaceBefore = 20f)]
         [Button]
         [DisableInEditorMode]
-        [EnableIf("@this._tcpClient.Connected")]
+        [EnableIf("@this.TcpClient.Connected")]
         private void Test() {
-            if (!_tcpClient.Connected) {
+            if (!TcpClient.Connected) {
                 return;
             }
 
             HelloRequest request = new HelloRequest { Name = "Unity Player" };
-            _tcpClient.SendMessage(1, request);
+            TcpClient.SendMessage(MessageType.MsgHelloworldRequest, request);
         }
 
         private static void OnClose() {

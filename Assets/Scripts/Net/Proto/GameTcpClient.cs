@@ -203,7 +203,8 @@ namespace Net.Proto {
             cts = null;
         }
 
-        public void SendMessage(ushort msgType, IMessage message) {
+        public void SendMessage(MessageType messageType, IMessage message) {
+            ushort msgType = (ushort)messageType;
             byte[] bodyBytes = message.ToByteArray();
             byte[] lengthBytes = ((uint)bodyBytes.Length).GetBytesBigEndian();
             byte[] msgTypeBytes = msgType.GetBytesBigEndian();

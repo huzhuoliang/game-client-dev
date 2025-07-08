@@ -24,11 +24,12 @@ namespace GameServerServices.MessageType {
     static MessageTypeReflection() {
       byte[] descriptorData = global::System.Convert.FromBase64String(
           string.Concat(
-            "ChJtZXNzYWdlX3R5cGUucHJvdG8SDG1lc3NhZ2VfdHlwZSpQCgtNZXNzYWdl",
-            "VHlwZRILCgdVTktOT1dOEAASGgoWTVNHX0hFTExPV09STERfUkVRVUVTVBAB",
-            "EhgKFE1TR19IRUxMT1dPUkxEX1JFUExZEAJCO1oYL21lc3NhZ2VUeXBlO21l",
-            "c3NhZ2VUeXBlqgIeR2FtZVNlcnZlclNlcnZpY2VzLk1lc3NhZ2VUeXBlYgZw",
-            "cm90bzM="));
+            "ChJtZXNzYWdlX3R5cGUucHJvdG8SDG1lc3NhZ2VfdHlwZSqGAQoLTWVzc2Fn",
+            "ZVR5cGUSCwoHVU5LTk9XThAAEhoKFk1TR19IRUxMT1dPUkxEX1JFUVVFU1QQ",
+            "ARIYChRNU0dfSEVMTE9XT1JMRF9SRVBMWRACEhkKFU1TR19VU0VSX1JFR0lT",
+            "VEVSX1JFURADEhkKFU1TR19VU0VSX1JFR0lTVEVSX1JFUxAEQjtaGC9tZXNz",
+            "YWdlVHlwZTttZXNzYWdlVHlwZaoCHkdhbWVTZXJ2ZXJTZXJ2aWNlcy5NZXNz",
+            "YWdlVHlwZWIGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::GameServerServices.MessageType.MessageType), }, null, null));
@@ -38,9 +39,15 @@ namespace GameServerServices.MessageType {
   }
   #region Enums
   public enum MessageType {
+    /// <summary>
+    /// option allow_alias = true;
+    /// Only values in range [0, 65535] are allowed for TCP use
+    /// </summary>
     [pbr::OriginalName("UNKNOWN")] Unknown = 0,
     [pbr::OriginalName("MSG_HELLOWORLD_REQUEST")] MsgHelloworldRequest = 1,
     [pbr::OriginalName("MSG_HELLOWORLD_REPLY")] MsgHelloworldReply = 2,
+    [pbr::OriginalName("MSG_USER_REGISTER_REQ")] MsgUserRegisterReq = 3,
+    [pbr::OriginalName("MSG_USER_REGISTER_RES")] MsgUserRegisterRes = 4,
   }
 
   #endregion

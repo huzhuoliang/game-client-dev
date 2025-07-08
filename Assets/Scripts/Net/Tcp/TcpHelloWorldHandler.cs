@@ -4,6 +4,7 @@ using Net.Proto;
 using UnityEngine;
 
 namespace Net.Tcp {
+    // ReSharper disable once UnusedType.Global
     public class TcpHelloWorldHandler : IMessageHandler<HelloReply> {
         public MessageType MessageType => MessageType.MsgHelloworldReply;
 
