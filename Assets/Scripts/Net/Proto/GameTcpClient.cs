@@ -1,8 +1,10 @@
 using System;
 using System.Buffers;
 using System.IO;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Game.Util;
@@ -33,7 +35,8 @@ namespace Net.Proto {
         private const int MAX_BODY_SIZE = 1024 * 1024; // 1 MB
 
         private TcpClient _client;
-        private NetworkStream _stream;
+
+        private SslStream _stream;
         private CancellationTokenSource _cts;
 
         private readonly RingBufferStream _ringBufferStream = new();
@@ -159,7 +162,11 @@ namespace Net.Proto {
                     return false;
                 }
 
-                _stream = _client.GetStream();
+                SslStream sslStream = new SslStream(_client.GetStream(), false, ValidateSeverCertificate);
+                await sslStream.AuthenticateAsClientAsync("localhost");
+
+                _stream = sslStream;
+
                 _cts = new CancellationTokenSource();
                 _ = ListenLoopAsync(_cts.Token);
                 _ = ParseLoopAsync(_cts.Token);
@@ -171,6 +178,10 @@ namespace Net.Proto {
                 Debug.LogErrorFormat("Connect attempt failed: {0}", ex.Message);
                 return false;
             }
+        }
+
+        private static bool ValidateSeverCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors) {
+            return sslPolicyErrors == SslPolicyErrors.None;
         }
 
         public void Close() {
