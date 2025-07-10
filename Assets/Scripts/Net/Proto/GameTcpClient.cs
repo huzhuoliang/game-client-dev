@@ -188,29 +188,37 @@ namespace Net.Proto {
         }
 
         public async Task Close() {
-            _isClientClosing = true;
-            _cts?.Cancel();
             try {
-                await Task.WhenAll(_listenTask, _parseTask);
+                _isClientClosing = true;
+                _cts?.Cancel();
+
+                await _listenTask;
+                _listenTask = null;
+                await _parseTask;
+                _parseTask = null;
+
+                _cts?.Dispose();
+                _cts = null;
+
+                UnRegisterAll();
+                CloseTokenSource(ref _connectTimeoutCts);
+                CloseTokenSource(ref _attemptConnectCts);
+                if (_stream != null) {
+                    _stream.Close();
+                    await _stream.DisposeAsync();
+                    _stream = null;
+                }
+
+                _client?.Close();
+                _client?.Dispose();
+                _client = null;
+                IsStart = false;
+
+                InvokeOnClose();
             } catch (Exception e) {
-                Debug.LogErrorFormat("Background task exception during close: {0}", e.Message);
+                Debug.LogErrorFormat("Exception during close: {0}", e.Message);
+                throw;
             }
-
-            _cts?.Dispose();
-            _cts = null;
-
-            UnRegisterAll();
-            CloseTokenSource(ref _connectTimeoutCts);
-            CloseTokenSource(ref _attemptConnectCts);
-            _stream?.Close();
-            _stream?.Dispose();
-            _stream = null;
-            _client?.Close();
-            _client?.Dispose();
-            _client = null;
-            IsStart = false;
-
-            InvokeOnClose();
         }
 
         private void InvokeOnClose() {
@@ -221,6 +229,7 @@ namespace Net.Proto {
             _hasClosed = true;
             Debug.LogFormat("Connect {0}:{1} closed", _addr, _port);
             OnClose?.Invoke();
+            _isClientClosing = false;
         }
 
 
@@ -286,7 +295,6 @@ namespace Net.Proto {
                 Debug.LogErrorFormat("连接异常: {0}", e);
             } finally {
                 // 连接结束
-                _isClientClosing = false;
                 InvokeOnClose();
             }
         }
