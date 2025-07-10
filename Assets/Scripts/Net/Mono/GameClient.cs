@@ -42,11 +42,11 @@ namespace Net.Mono {
         [EnableIf("@this.TcpClient.IsStart")]
         [GUIColor(1.0f, 0.5f, 0.5f)]
         private void Disconnect() {
-            TcpClient.Close();
+            _ = TcpClient.Close();
         }
 
         private void OnDestroy() {
-            TcpClient?.Close();
+            _ = TcpClient.Close();
         }
 
         [PropertySpace(SpaceBefore = 20f)]

@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Net.Proto;
+using UnityEngine;
 
 public class RingBufferStream {
     private readonly byte[] _buffer;
