@@ -47,6 +47,7 @@ Assets/Scripts/proto/*.cs				text eol=lf
 *.lighting								unityyaml
 *.signal								unityyaml
 *.asmdef								-text diff
+*.spriteatlasv2							text eol=lf
 # Unity Binary Assets
 *.cubemap	lfs
 *.unitypackage	lfs
