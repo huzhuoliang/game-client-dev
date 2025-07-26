@@ -26,14 +26,15 @@ namespace GameServerServices.User.Register {
           string.Concat(
             "ChN1c2VyX3JlZ2lzdGVyLnByb3RvEg11c2VyX3JlZ2lzdGVyIjUKD1VzZXJS",
             "ZWdpc3RlclJlcRIQCgh1c2VybmFtZRgBIAEoCRIQCghwYXNzd29yZBgCIAEo",
-            "CSIzCg9Vc2VyUmVnaXN0ZXJSZXMSDwoHc3VjY2VzcxgBIAEoCBIPCgdtZXNz",
-            "YWdlGAIgASgJQjxaFy91c2VyL3JlZ2lzdGVyO3JlZ2lzdGVyqgIgR2FtZVNl",
-            "cnZlclNlcnZpY2VzLlVzZXIuUmVnaXN0ZXJiBnByb3RvMw=="));
+            "CSJSCg9Vc2VyUmVnaXN0ZXJSZXMSDwoHc3VjY2VzcxgBIAEoCBIKCgJpZBgC",
+            "IAEoAxIRCgllcnJvcmNvZGUYAyABKA0SDwoHbWVzc2FnZRgEIAEoCUJAWhsv",
+            "dGNwL3VzZXIvcmVnaXN0ZXI7cmVnaXN0ZXKqAiBHYW1lU2VydmVyU2Vydmlj",
+            "ZXMuVXNlci5SZWdpc3RlcmIGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::GameServerServices.User.Register.UserRegisterReq), global::GameServerServices.User.Register.UserRegisterReq.Parser, new[]{ "Username", "Password" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::GameServerServices.User.Register.UserRegisterRes), global::GameServerServices.User.Register.UserRegisterRes.Parser, new[]{ "Success", "Message" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::GameServerServices.User.Register.UserRegisterRes), global::GameServerServices.User.Register.UserRegisterRes.Parser, new[]{ "Success", "Id", "Errorcode", "Message" }, null, null, null, null)
           }));
     }
     #endregion
@@ -314,6 +315,8 @@ namespace GameServerServices.User.Register {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public UserRegisterRes(UserRegisterRes other) : this() {
       success_ = other.success_;
+      id_ = other.id_;
+      errorcode_ = other.errorcode_;
       message_ = other.message_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
@@ -336,8 +339,35 @@ namespace GameServerServices.User.Register {
       }
     }
 
+    /// <summary>Field number for the "id" field.</summary>
+    public const int IdFieldNumber = 2;
+    private long id_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public long Id {
+      get { return id_; }
+      set {
+        id_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "errorcode" field.</summary>
+    public const int ErrorcodeFieldNumber = 3;
+    private uint errorcode_;
+    /// <summary>
+    /// 0 - success; 1 - username already exists; 2 - illegal input; 3 - system exception
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Errorcode {
+      get { return errorcode_; }
+      set {
+        errorcode_ = value;
+      }
+    }
+
     /// <summary>Field number for the "message" field.</summary>
-    public const int MessageFieldNumber = 2;
+    public const int MessageFieldNumber = 4;
     private string message_ = "";
     /// <summary>
     /// error message
@@ -367,6 +397,8 @@ namespace GameServerServices.User.Register {
         return true;
       }
       if (Success != other.Success) return false;
+      if (Id != other.Id) return false;
+      if (Errorcode != other.Errorcode) return false;
       if (Message != other.Message) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -376,6 +408,8 @@ namespace GameServerServices.User.Register {
     public override int GetHashCode() {
       int hash = 1;
       if (Success != false) hash ^= Success.GetHashCode();
+      if (Id != 0L) hash ^= Id.GetHashCode();
+      if (Errorcode != 0) hash ^= Errorcode.GetHashCode();
       if (Message.Length != 0) hash ^= Message.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -399,8 +433,16 @@ namespace GameServerServices.User.Register {
         output.WriteRawTag(8);
         output.WriteBool(Success);
       }
+      if (Id != 0L) {
+        output.WriteRawTag(16);
+        output.WriteInt64(Id);
+      }
+      if (Errorcode != 0) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(Errorcode);
+      }
       if (Message.Length != 0) {
-        output.WriteRawTag(18);
+        output.WriteRawTag(34);
         output.WriteString(Message);
       }
       if (_unknownFields != null) {
@@ -417,8 +459,16 @@ namespace GameServerServices.User.Register {
         output.WriteRawTag(8);
         output.WriteBool(Success);
       }
+      if (Id != 0L) {
+        output.WriteRawTag(16);
+        output.WriteInt64(Id);
+      }
+      if (Errorcode != 0) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(Errorcode);
+      }
       if (Message.Length != 0) {
-        output.WriteRawTag(18);
+        output.WriteRawTag(34);
         output.WriteString(Message);
       }
       if (_unknownFields != null) {
@@ -433,6 +483,12 @@ namespace GameServerServices.User.Register {
       int size = 0;
       if (Success != false) {
         size += 1 + 1;
+      }
+      if (Id != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(Id);
+      }
+      if (Errorcode != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Errorcode);
       }
       if (Message.Length != 0) {
         size += 1 + pb::CodedOutputStream.ComputeStringSize(Message);
@@ -451,6 +507,12 @@ namespace GameServerServices.User.Register {
       }
       if (other.Success != false) {
         Success = other.Success;
+      }
+      if (other.Id != 0L) {
+        Id = other.Id;
+      }
+      if (other.Errorcode != 0) {
+        Errorcode = other.Errorcode;
       }
       if (other.Message.Length != 0) {
         Message = other.Message;
@@ -478,7 +540,15 @@ namespace GameServerServices.User.Register {
             Success = input.ReadBool();
             break;
           }
-          case 18: {
+          case 16: {
+            Id = input.ReadInt64();
+            break;
+          }
+          case 24: {
+            Errorcode = input.ReadUInt32();
+            break;
+          }
+          case 34: {
             Message = input.ReadString();
             break;
           }
@@ -505,7 +575,15 @@ namespace GameServerServices.User.Register {
             Success = input.ReadBool();
             break;
           }
-          case 18: {
+          case 16: {
+            Id = input.ReadInt64();
+            break;
+          }
+          case 24: {
+            Errorcode = input.ReadUInt32();
+            break;
+          }
+          case 34: {
             Message = input.ReadString();
             break;
           }

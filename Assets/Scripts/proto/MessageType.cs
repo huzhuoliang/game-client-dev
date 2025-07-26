@@ -27,9 +27,9 @@ namespace GameServerServices.MessageType {
             "ChJtZXNzYWdlX3R5cGUucHJvdG8SDG1lc3NhZ2VfdHlwZSqGAQoLTWVzc2Fn",
             "ZVR5cGUSCwoHVU5LTk9XThAAEhoKFk1TR19IRUxMT1dPUkxEX1JFUVVFU1QQ",
             "ARIYChRNU0dfSEVMTE9XT1JMRF9SRVBMWRACEhkKFU1TR19VU0VSX1JFR0lT",
-            "VEVSX1JFURADEhkKFU1TR19VU0VSX1JFR0lTVEVSX1JFUxAEQjtaGC9tZXNz",
-            "YWdlVHlwZTttZXNzYWdlVHlwZaoCHkdhbWVTZXJ2ZXJTZXJ2aWNlcy5NZXNz",
-            "YWdlVHlwZWIGcHJvdG8z"));
+            "VEVSX1JFURADEhkKFU1TR19VU0VSX1JFR0lTVEVSX1JFUxAEQj9aHC90Y3Av",
+            "bWVzc2FnZVR5cGU7bWVzc2FnZVR5cGWqAh5HYW1lU2VydmVyU2VydmljZXMu",
+            "TWVzc2FnZVR5cGViBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::GameServerServices.MessageType.MessageType), }, null, null));

@@ -9,7 +9,8 @@ namespace Net.Tcp.User {
         public MessageType MessageType => MessageType.MsgUserRegisterRes;
 
         public void Handle(UserRegisterRes message) {
-            Debug.LogErrorFormat("UserRegister message: success={0} message={1}", message.Success, message.Message);
+            Debug.LogErrorFormat("UserRegister message: success={0} id={1} errorCode={2} message={3}",
+                    message.Success, message.Id, message.Errorcode, message.Message);
         }
     }
 }

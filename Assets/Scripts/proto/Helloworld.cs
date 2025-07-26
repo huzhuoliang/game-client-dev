@@ -26,8 +26,8 @@ namespace GameServerServices.HelloWorld {
           string.Concat(
             "ChBoZWxsb3dvcmxkLnByb3RvEgpoZWxsb3dvcmxkIhwKDEhlbGxvUmVxdWVz",
             "dBIMCgRuYW1lGAEgASgJIh0KCkhlbGxvUmVwbHkSDwoHbWVzc2FnZRgBIAEo",
-            "CUI4WhYvaGVsbG93b3JsZDtoZWxsb3dvcmxkqgIdR2FtZVNlcnZlclNlcnZp",
-            "Y2VzLkhlbGxvV29ybGRiBnByb3RvMw=="));
+            "CUI8WhovdGNwL2hlbGxvd29ybGQ7aGVsbG93b3JsZKoCHUdhbWVTZXJ2ZXJT",
+            "ZXJ2aWNlcy5IZWxsb1dvcmxkYgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {

@@ -9,14 +9,18 @@ namespace Net.Mono {
         [SerializeField]
         private string addr = "192.168.50.16";
 
+        public string Addr => addr;
+
         [SerializeField]
         private int port = 50052;
 
-        [ShowInInspector]
-        private bool IsClientStart => TcpClient.IsStart;
+        public int Port => port;
 
         [ShowInInspector]
-        private bool IsClientConnected => TcpClient.Connected;
+        public bool IsClientStart => TcpClient.IsStart;
+
+        [ShowInInspector]
+        public bool IsClientConnected => TcpClient.Connected;
 
         public GameTcpClient TcpClient { get; } = new();
 
@@ -24,12 +28,7 @@ namespace Net.Mono {
             TcpClient.OnClose += OnClose;
         }
 
-
-        [HorizontalGroup("Conn")]
-        [Button(ButtonSizes.Large)]
-        [EnableIf("@!this.TcpClient.IsStart")]
-        [GUIColor(0.5f, 1.0f, 0.5f)]
-        private void Connect() {
+        public void Connect() {
             if (TcpClient.Connected) {
                 return;
             }
@@ -37,12 +36,24 @@ namespace Net.Mono {
             _ = TcpClient.StartConnectionAsync(addr, port);
         }
 
+        public void Disconnect() {
+            _ = TcpClient.Close();
+        }
+
+        [HorizontalGroup("Conn")]
+        [Button(ButtonSizes.Large)]
+        [EnableIf("@!this.TcpClient.IsStart")]
+        [GUIColor(0.5f, 1.0f, 0.5f)]
+        private void TestConnect() {
+            Connect();
+        }
+
         [HorizontalGroup("Conn")]
         [Button(ButtonSizes.Large)]
         [EnableIf("@this.TcpClient.IsStart")]
         [GUIColor(1.0f, 0.5f, 0.5f)]
-        private void Disconnect() {
-            _ = TcpClient.Close();
+        private void TestDisconnect() {
+            Disconnect();
         }
 
         private void OnDestroy() {
