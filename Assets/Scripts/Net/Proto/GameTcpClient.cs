@@ -43,19 +43,20 @@ namespace Net.Proto {
 
         private readonly ArrayPool<byte> _bufferPool = ArrayPool<byte>.Shared;
 
-        public bool Connected {
-            get {
-                TcpClient client = _client;
-                try {
-                    if (client?.Client == null) return false;
-
-                    Socket socket = client.Client;
-                    return !(socket.Poll(1, SelectMode.SelectRead) && socket.Available == 0);
-                } catch {
-                    return false;
-                }
-            }
-        }
+        //        public bool Connected {
+        //            get {
+        //                TcpClient client = _client;
+        //                try {
+        //                    if (client?.Client == null) return false;
+        //
+        //                    Socket socket = client.Client;
+        //                    return !(socket.Poll(1, SelectMode.SelectRead) && socket.Available == 0);
+        //                } catch {
+        //                    return false;
+        //                }
+        //            }
+        //        }
+        public bool Connected { get; private set; }
 
         public bool IsStart { get; private set; }
 
@@ -78,6 +79,7 @@ namespace Net.Proto {
 
             RegisterAll();
             IsStart = true;
+            Connected = false;
             _isClientClosing = false;
             _hasClosed = false;
         }
@@ -132,6 +134,7 @@ namespace Net.Proto {
             for (int i = 0; i < maxAttempts && !_attemptConnectCts.IsCancellationRequested; i++) {
                 _connectTimeoutCts = new CancellationTokenSource(timeoutMs);
                 success = await TryConnectOnce(_connectTimeoutCts.Token, addr, port);
+                Connected = success;
                 if (success) {
                     _addr = addr;
                     _port = port;
@@ -149,7 +152,7 @@ namespace Net.Proto {
             }
 
             if (!success) {
-                Debug.LogErrorFormat("Connect {0}:{1} attempt {2} times all failed", addr, port, maxAttempts);
+                Debug.LogFormat("Connect {0}:{1} attempt abort", addr, port);
                 _ = Close();
             }
         }
@@ -178,7 +181,7 @@ namespace Net.Proto {
                 Debug.LogError("Connect cancelled by user");
                 return false;
             } catch (Exception ex) {
-                Debug.LogErrorFormat("Connect attempt failed: {0}", ex.Message);
+                Debug.LogErrorFormat("Connect attempt failed:\n{0}", ex);
                 return false;
             }
         }
@@ -192,10 +195,15 @@ namespace Net.Proto {
                 _isClientClosing = true;
                 _cts?.Cancel();
 
-                await _listenTask;
-                _listenTask = null;
-                await _parseTask;
-                _parseTask = null;
+                if (_listenTask != null) {
+                    await _listenTask;
+                    _listenTask = null;
+                }
+
+                if (_parseTask != null) {
+                    await _parseTask;
+                    _parseTask = null;
+                }
 
                 _cts?.Dispose();
                 _cts = null;
