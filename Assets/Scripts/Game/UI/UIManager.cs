@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -12,6 +13,14 @@ namespace Game.UI {
         private List<GameWindowBase> windowTemplateList = new();
 
         private readonly Dictionary<ulong, GameWindowBase> _windows = new();
+
+        private void Start() {
+            foreach (GameWindowBase window in windowTemplateList) {
+                if (window != null) {
+                    window.gameObject.SetActive(false);
+                }
+            }
+        }
 
         /// <summary>
         /// 当前存在的窗口实例 ID

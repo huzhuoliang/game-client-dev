@@ -44,14 +44,15 @@ namespace Game.Login {
             window.SetInfoText("Connecting to server...");
             float startTime = Time.time;
             float pastTime = 0f;
-            yield return new WaitForEndOfFrame();
             while (!StateMachine.GameClient.IsClientConnected && pastTime <= CONNECT_TIMEOUT_INTERVAL) {
                 window.SetInfoText(string.Format("Connecting to server... {0:0.00}s", pastTime));
                 float progress = Mathf.Clamp(pastTime / CONNECT_TIMEOUT_INTERVAL, 0f, 1f);
                 window.SetProgress(progress);
-                yield return new WaitForEndOfFrame();
+                yield return new WaitForSeconds(0.016f); // 大约每秒更新 60 次
                 pastTime = Time.time - startTime;
             }
+
+            window.SetProgress(1f);
 
             if (!StateMachine.GameClient.IsClientConnected) {
                 StateMachine.GameClient.Disconnect();
