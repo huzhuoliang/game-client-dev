@@ -133,5 +133,7 @@ Assets/Scripts/proto/*.cs				text eol=lf
 *.gz        lfs
 *.rar       lfs
 *.tar       lfs
+# Font
+*.ttf       lfs
 Assets/DataResources/FontAssets/sarasa-mono-sc/sarasa-mono-sc-regular* filter=lfs diff=lfs merge=lfs -text
 Assets/Particle_Idea_100/Prefab/Particle_Idea_100.prefab filter=lfs diff=lfs merge=lfs -text
