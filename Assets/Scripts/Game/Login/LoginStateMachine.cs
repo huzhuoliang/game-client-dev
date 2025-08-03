@@ -31,8 +31,8 @@ namespace Game.Login {
             return this;
         }
 
-        public LoginStateBase GetState(Type stateType) {
-            return _states.GetValueOrDefault(stateType);
+        public LoginStateBase GetState<T>() where T : LoginStateBase {
+            return _states.GetValueOrDefault(typeof(T)) as T;
         }
 
         private static List<Type> GetAllSubClass(Type parentType) {
@@ -53,7 +53,7 @@ namespace Game.Login {
         }
 
         public IEnumerator StartStateMachine() {
-            yield return _stateMachineController.Start(GetState(typeof(AppStartState)));
+            yield return _stateMachineController.Start(GetState<AppStartState>());
         }
 
         public LoginStateMachine SetUIManager(UIManager uiManager) {

@@ -1,6 +1,5 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using Game.UI;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -17,7 +16,7 @@ namespace Game.Login {
             while (!StateMachine.GameClient.IsClientConnected) {
                 yield return TryConnect(window);
                 if (StateMachine.GameClient.IsClientConnected) {
-                    NextState = StateMachine.GetState(typeof(ShowLoginUIState));
+                    SetNext<ShowLoginUIState>();
                     break;
                 }
 
@@ -32,7 +31,7 @@ namespace Game.Login {
                         .SetOnCancel(() => cancel = true);
                 yield return new WaitUntil(() => messageWindow.IsShow == false);
                 if (cancel) {
-                    NextState = StateMachine.GetState(typeof(AppQuitState));
+                    SetNext<AppQuitState>();
                     break;
                 }
             }

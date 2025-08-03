@@ -5,7 +5,6 @@ namespace Game.Login {
     [Serializable]
     public sealed class AppQuitState : LoginStateBase {
         protected override IEnumerator StateStart() {
-            NextState = null;
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
 #else

@@ -5,7 +5,6 @@ namespace Game.Login {
     [Serializable]
     public sealed class ShowLoadingUIState : LoginStateBase {
         protected override IEnumerator StateStart() {
-            NextState = null;
             yield break;
         }
     }

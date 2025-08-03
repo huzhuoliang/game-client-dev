@@ -26,6 +26,14 @@ namespace Game.Login {
             yield return StateStart();
         }
 
+        protected void SetNext<T>() where T : LoginStateBase {
+            if (StateMachine == null) {
+                return;
+            }
+
+            SetNext(StateMachine.GetState<T>());
+        }
+
         protected abstract IEnumerator StateStart();
     }
 }

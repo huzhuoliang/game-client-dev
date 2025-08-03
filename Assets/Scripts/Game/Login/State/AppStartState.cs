@@ -8,7 +8,7 @@ namespace Game.Login {
         protected override IEnumerator StateStart() {
             Debug.LogError("============ AppStartState: 初始化游戏...");
             yield return new WaitForEndOfFrame();
-            NextState = StateMachine.GetState(typeof(ShowAppLoadingUIState));
+            SetNext<ShowAppLoadingUIState>();
         }
     }
 }
