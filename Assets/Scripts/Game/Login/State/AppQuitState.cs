@@ -1,17 +1,21 @@
+using System;
 using System.Collections;
-using UnityEngine;
 
 namespace Game.Login {
+    [Serializable]
     public class AppQuitState : LoginStateBase {
+        public AppQuitState() {
+        }
+
         public AppQuitState(LoginStateMachine stateMachine) : base(stateMachine) {
         }
 
-        public override IEnumerator Start() {
+        protected override IEnumerator StateStart() {
             NextState = null;
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
 #else
-            Application.Quit();
+            UnityEngine.Application.Quit();
 #endif
             yield break;
         }

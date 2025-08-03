@@ -1,8 +1,12 @@
 {
-    "name": "StateMachine",
-    "rootNamespace": "Game.StateMachine",
-    "references": [],
-    "includePlatforms": [],
+    "name": "StateMachine.Editor",
+    "rootNamespace": "",
+    "references": [
+        "StateMachine"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,

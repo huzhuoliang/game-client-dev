@@ -1,12 +1,18 @@
 using System.Collections.Generic;
-using UnityEngine;
 using Game.StateMachine;
 using System;
+using System.Collections;
 using Game.UI;
 using Net.Mono;
+using Sirenix.OdinInspector;
 
 namespace Game.Login {
-    public class LoginStateMachine : MonoBehaviour {
+    [Serializable]
+    public class LoginStateMachine {
+        [ShowInInspector]
+        [ReadOnly]
+        [HideReferenceObjectPicker]
+        [HideLabel]
         private readonly StateMachineController _stateMachineController = new();
 
         private readonly Dictionary<Type, LoginStateBase> _states = new();
@@ -15,12 +21,14 @@ namespace Game.Login {
         public UIManager UIManager { get; private set; }
         public GameClient GameClient { get; private set; }
 
-        private void Start() {
+        public LoginStateMachine Init() {
             List<Type> subTypes = GetAllSubClass(typeof(LoginStateBase));
             foreach (Type type in subTypes) {
-                LoginStateBase state = (LoginStateBase)Activator.CreateInstance(type, new object[] { this });
+                LoginStateBase state = (LoginStateBase)Activator.CreateInstance(type, this);
                 _states.TryAdd(type, state);
             }
+
+            return this;
         }
 
         private static List<Type> GetAllSubClass(Type parentType) {
@@ -40,8 +48,8 @@ namespace Game.Login {
             return list;
         }
 
-        public void StartStateMachine() {
-            StartCoroutine(_stateMachineController.Start(new AppStartState(this)));
+        public IEnumerator StartStateMachine() {
+            yield return _stateMachineController.Start(new AppStartState(this));
         }
 
         public LoginStateMachine SetUIManager(UIManager uiManager) {

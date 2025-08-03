@@ -1,16 +1,23 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using Game.UI;
+using Sirenix.OdinInspector;
 using UnityEngine;
 
 namespace Game.Login {
+    [Serializable]
     public sealed class ShowAppLoadingUIState : LoginStateBase {
+        [ShowInInspector]
         private const float CONNECT_TIMEOUT_INTERVAL = 5f;
+
+        public ShowAppLoadingUIState() {
+        }
 
         public ShowAppLoadingUIState(LoginStateMachine stateMachine) : base(stateMachine) {
         }
 
-        public override IEnumerator Start() {
+        protected override IEnumerator StateStart() {
             Debug.LogError("============ ShowAppLoadingUIState: 显示加载UI ...");
             AppLoadingWindow window = StateMachine.UIManager.ShowWindow<AppLoadingWindow>();
             while (!StateMachine.GameClient.IsClientConnected) {

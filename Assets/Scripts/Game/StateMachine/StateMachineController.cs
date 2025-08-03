@@ -1,7 +1,12 @@
+using System;
 using System.Collections;
+using Sirenix.OdinInspector;
 
 namespace Game.StateMachine {
+    [Serializable]
     public class StateMachineController {
+        [ShowInInspector]
+        [LabelText("Current State")]
         public State CurrState { get; private set; }
 
         public IEnumerator Start(State state) {

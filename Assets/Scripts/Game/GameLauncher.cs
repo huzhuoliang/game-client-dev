@@ -1,34 +1,36 @@
 using Game.Login;
 using Game.UI;
 using Net.Mono;
-using Sirenix.OdinInspector;
 using UnityEngine;
 
 namespace Game {
     /// <summary>
     /// 游戏启动流程
     /// </summary>
-    [RequireComponent(typeof(LoginStateMachine))]
+    [RequireComponent(typeof(GameClient))]
+    [RequireComponent(typeof(UIManager))]
+    [RequireComponent(typeof(LoginStateMachineMono))]
     public class GameLauncher : MonoBehaviour {
-        [SerializeField]
-        [Required]
-        private GameClient gameClient;
+        private GameClient _gameClient;
 
-        [SerializeField]
-        [Required]
-        private UIManager uiManager;
+        private UIManager _uiManager;
 
-        private LoginStateMachine _stateMachine;
+        private LoginStateMachineMono _stateMachine;
 
         private void Awake() {
-            _stateMachine = GetComponent<LoginStateMachine>();
+            _gameClient = GetComponent<GameClient>();
+            _uiManager = GetComponent<UIManager>();
+            _stateMachine = GetComponent<LoginStateMachineMono>();
         }
 
         private void Start() {
-            _stateMachine
-                    .SetUIManager(uiManager)
-                    .SetGameClient(gameClient)
-                    .StartStateMachine();
+            // Init
+            _stateMachine.StateMachine
+                    .Init()
+                    .SetUIManager(_uiManager)
+                    .SetGameClient(_gameClient);
+            // Start
+            StartCoroutine(_stateMachine.StateMachine.StartStateMachine());
         }
     }
 }

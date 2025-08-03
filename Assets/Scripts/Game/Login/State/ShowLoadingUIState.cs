@@ -1,12 +1,16 @@
+using System;
 using System.Collections;
-using Game.UI;
 
 namespace Game.Login {
+    [Serializable]
     public sealed class ShowLoadingUIState : LoginStateBase {
+        public ShowLoadingUIState() {
+        }
+
         public ShowLoadingUIState(LoginStateMachine stateMachine) : base(stateMachine) {
         }
 
-        public override IEnumerator Start() {
+        protected override IEnumerator StateStart() {
             NextState = null;
             yield break;
         }

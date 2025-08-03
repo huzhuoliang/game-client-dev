@@ -1,14 +1,31 @@
+using System;
 using System.Collections;
 using Game.StateMachine;
 
 namespace Game.Login {
+    [Serializable]
     public abstract class LoginStateBase : State {
         protected readonly LoginStateMachine StateMachine;
+
+        /// <summary>
+        /// 无参构造仅用于测试，没有正确赋值状态机的状态无法运行
+        /// </summary>
+        protected LoginStateBase() {
+            StateMachine = null;
+        }
 
         protected LoginStateBase(LoginStateMachine stateMachine) {
             StateMachine = stateMachine;
         }
 
-        public abstract override IEnumerator Start();
+        public override IEnumerator Start() {
+            if (StateMachine == null) {
+                yield break;
+            }
+
+            yield return StateStart();
+        }
+
+        protected abstract IEnumerator StateStart();
     }
 }

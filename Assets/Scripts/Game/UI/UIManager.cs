@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -12,6 +11,8 @@ namespace Game.UI {
         [SerializeReference]
         private List<GameWindowBase> windowTemplateList = new();
 
+        [ShowInInspector]
+        [DictionaryDrawerSettings(IsReadOnly = true)]
         private readonly Dictionary<ulong, GameWindowBase> _windows = new();
 
         private void Start() {
