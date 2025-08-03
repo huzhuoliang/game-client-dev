@@ -3,13 +3,7 @@ using System.Collections;
 
 namespace Game.Login {
     [Serializable]
-    public class AppQuitState : LoginStateBase {
-        public AppQuitState() {
-        }
-
-        public AppQuitState(LoginStateMachine stateMachine) : base(stateMachine) {
-        }
-
+    public sealed class AppQuitState : LoginStateBase {
         protected override IEnumerator StateStart() {
             NextState = null;
 #if UNITY_EDITOR

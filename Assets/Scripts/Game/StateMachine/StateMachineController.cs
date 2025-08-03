@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
 using Sirenix.OdinInspector;
+using UnityEngine;
+using Game.CoroutineExtensions;
 
 namespace Game.StateMachine {
     [Serializable]
@@ -16,7 +18,9 @@ namespace Game.StateMachine {
 
             while (state != null) {
                 CurrState = state;
-                yield return state.Start();
+                IEnumerator routine = state.Start();
+                routine = CoroutineExtension.WrapCoroutine(routine, Debug.LogException);
+                yield return routine;
                 state = state.NextState;
             }
         }

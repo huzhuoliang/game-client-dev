@@ -11,19 +11,13 @@ namespace Game.Login {
         [ShowInInspector]
         private const float CONNECT_TIMEOUT_INTERVAL = 5f;
 
-        public ShowAppLoadingUIState() {
-        }
-
-        public ShowAppLoadingUIState(LoginStateMachine stateMachine) : base(stateMachine) {
-        }
-
         protected override IEnumerator StateStart() {
             Debug.LogError("============ ShowAppLoadingUIState: 显示加载UI ...");
             AppLoadingWindow window = StateMachine.UIManager.ShowWindow<AppLoadingWindow>();
             while (!StateMachine.GameClient.IsClientConnected) {
                 yield return TryConnect(window);
                 if (StateMachine.GameClient.IsClientConnected) {
-                    NextState = StateMachine.States.GetValueOrDefault(typeof(ShowLoginUIState));
+                    NextState = StateMachine.GetState(typeof(ShowLoginUIState));
                     break;
                 }
 
@@ -38,7 +32,7 @@ namespace Game.Login {
                         .SetOnCancel(() => cancel = true);
                 yield return new WaitUntil(() => messageWindow.IsShow == false);
                 if (cancel) {
-                    NextState = StateMachine.States.GetValueOrDefault(typeof(AppQuitState));
+                    NextState = StateMachine.GetState(typeof(AppQuitState));
                     break;
                 }
             }

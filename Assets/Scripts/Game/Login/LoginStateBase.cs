@@ -5,7 +5,7 @@ using Game.StateMachine;
 namespace Game.Login {
     [Serializable]
     public abstract class LoginStateBase : State {
-        protected readonly LoginStateMachine StateMachine;
+        protected LoginStateMachine StateMachine { get; private set; }
 
         /// <summary>
         /// 无参构造仅用于测试，没有正确赋值状态机的状态无法运行
@@ -14,7 +14,7 @@ namespace Game.Login {
             StateMachine = null;
         }
 
-        protected LoginStateBase(LoginStateMachine stateMachine) {
+        public void Init(LoginStateMachine stateMachine) {
             StateMachine = stateMachine;
         }
 

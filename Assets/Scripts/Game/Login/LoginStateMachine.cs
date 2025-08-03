@@ -16,7 +16,6 @@ namespace Game.Login {
         private readonly StateMachineController _stateMachineController = new();
 
         private readonly Dictionary<Type, LoginStateBase> _states = new();
-        public IReadOnlyDictionary<Type, LoginStateBase> States => _states;
 
         public UIManager UIManager { get; private set; }
         public GameClient GameClient { get; private set; }
@@ -24,11 +23,16 @@ namespace Game.Login {
         public LoginStateMachine Init() {
             List<Type> subTypes = GetAllSubClass(typeof(LoginStateBase));
             foreach (Type type in subTypes) {
-                LoginStateBase state = (LoginStateBase)Activator.CreateInstance(type, this);
+                LoginStateBase state = (LoginStateBase)Activator.CreateInstance(type);
+                state.Init(this);
                 _states.TryAdd(type, state);
             }
 
             return this;
+        }
+
+        public LoginStateBase GetState(Type stateType) {
+            return _states.GetValueOrDefault(stateType);
         }
 
         private static List<Type> GetAllSubClass(Type parentType) {
@@ -49,7 +53,7 @@ namespace Game.Login {
         }
 
         public IEnumerator StartStateMachine() {
-            yield return _stateMachineController.Start(new AppStartState(this));
+            yield return _stateMachineController.Start(GetState(typeof(AppStartState)));
         }
 
         public LoginStateMachine SetUIManager(UIManager uiManager) {
