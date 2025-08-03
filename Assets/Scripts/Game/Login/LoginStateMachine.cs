@@ -2,8 +2,6 @@ using System.Collections.Generic;
 using Game.StateMachine;
 using System;
 using System.Collections;
-using Game.UI;
-using Net.Mono;
 using Sirenix.OdinInspector;
 
 namespace Game.Login {
@@ -17,18 +15,15 @@ namespace Game.Login {
 
         private readonly Dictionary<Type, LoginStateBase> _states = new();
 
-        public UIManager UIManager { get; private set; }
-        public GameClient GameClient { get; private set; }
+        public readonly LoginStateMachineContext Context = new();
 
-        public LoginStateMachine Init() {
+        public void Init() {
             List<Type> subTypes = GetAllSubClass(typeof(LoginStateBase));
             foreach (Type type in subTypes) {
                 LoginStateBase state = (LoginStateBase)Activator.CreateInstance(type);
                 state.Init(this);
                 _states.TryAdd(type, state);
             }
-
-            return this;
         }
 
         public LoginStateBase GetState<T>() where T : LoginStateBase {
@@ -54,16 +49,6 @@ namespace Game.Login {
 
         public IEnumerator StartStateMachine() {
             yield return _stateMachineController.Start(GetState<AppStartState>());
-        }
-
-        public LoginStateMachine SetUIManager(UIManager uiManager) {
-            UIManager = uiManager;
-            return this;
-        }
-
-        public LoginStateMachine SetGameClient(GameClient gameClient) {
-            GameClient = gameClient;
-            return this;
         }
     }
 }

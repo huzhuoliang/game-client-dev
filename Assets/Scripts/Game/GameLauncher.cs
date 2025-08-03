@@ -25,8 +25,8 @@ namespace Game {
 
         private void Start() {
             // Init
-            _stateMachine.StateMachine
-                    .Init()
+            _stateMachine.StateMachine.Init();
+            _stateMachine.StateMachine.Context
                     .SetUIManager(_uiManager)
                     .SetGameClient(_gameClient);
             // Start
