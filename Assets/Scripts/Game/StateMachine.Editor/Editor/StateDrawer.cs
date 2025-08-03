@@ -25,14 +25,6 @@ namespace Game.StateMachine.Editor {
                 GUILayout.EndVertical();
             }
             SirenixEditorGUI.EndBox();
-
-            //            Rect rect = EditorGUILayout.GetControlRect();
-            //            if (label != null) {
-            //                rect = EditorGUI.PrefixLabel(rect, label);
-            //            }
-            //
-            //            EditorGUI.LabelField(rect, state.GetType().ToString());
-            //            CallNextDrawer(null);
         }
     }
 }
