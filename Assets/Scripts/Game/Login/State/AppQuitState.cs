@@ -1,16 +1,16 @@
 using System;
-using System.Collections;
+using Cysharp.Threading.Tasks;
 
 namespace Game.Login {
     [Serializable]
     public sealed class AppQuitState : LoginStateBase {
-        protected override IEnumerator StateStart() {
+        protected override async UniTask StateStart() {
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
 #else
             UnityEngine.Application.Quit();
 #endif
-            yield break;
+            await UniTask.Yield();
         }
     }
 }

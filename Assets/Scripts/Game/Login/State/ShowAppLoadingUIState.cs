@@ -1,5 +1,5 @@
 using System;
-using System.Collections;
+using Cysharp.Threading.Tasks;
 using Game.UI;
 using Net.Mono;
 using Sirenix.OdinInspector;
@@ -11,12 +11,12 @@ namespace Game.Login {
         [ShowInInspector]
         private const float CONNECT_TIMEOUT_INTERVAL = 5f;
 
-        protected override IEnumerator StateStart() {
+        protected override async UniTask StateStart() {
             LoginStateMachineContext context = StateMachine.Context;
             Debug.LogError("============ ShowAppLoadingUIState: 显示加载UI ...");
             AppLoadingWindow window = context.UIManager.ShowWindow<AppLoadingWindow>();
             while (!context.GameClient.IsClientConnected) {
-                yield return TryConnect(window);
+                await TryConnect(window);
                 if (context.GameClient.IsClientConnected) {
                     SetNext<ShowLoginUIState>();
                     break;
@@ -31,7 +31,7 @@ namespace Game.Login {
                         .SetShowCancelButton(true)
                         .SetShowConfirmButton(true)
                         .SetOnCancel(() => cancel = true);
-                yield return new WaitUntil(() => messageWindow.IsShow == false);
+                await UniTask.WaitUntil(() => messageWindow.IsShow == false);
                 if (cancel) {
                     SetNext<AppQuitState>();
                     break;
@@ -41,7 +41,7 @@ namespace Game.Login {
             context.UIManager.HideWindow(window);
         }
 
-        private IEnumerator TryConnect(AppLoadingWindow window) {
+        private async UniTask TryConnect(AppLoadingWindow window) {
             LoginStateMachineContext context = StateMachine.Context;
             GameClient gameClient = context.GameClient;
             gameClient.Connect(); // 开始连接服务器
@@ -52,7 +52,7 @@ namespace Game.Login {
                 window.SetInfoText(string.Format("Connecting to server... {0:0.00}s", pastTime));
                 float progress = Mathf.Clamp(pastTime / CONNECT_TIMEOUT_INTERVAL, 0f, 1f);
                 window.SetProgress(progress);
-                yield return new WaitForSeconds(0.016f); // 大约每秒更新 60 次
+                await UniTask.Delay(16); // 大约每秒更新 60 次
                 pastTime = Time.time - startTime;
             }
 

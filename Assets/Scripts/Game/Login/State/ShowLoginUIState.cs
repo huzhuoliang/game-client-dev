@@ -1,14 +1,14 @@
 using System;
-using System.Collections;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace Game.Login {
     [Serializable]
     public sealed class ShowLoginUIState : LoginStateBase {
-        protected override IEnumerator StateStart() {
+        protected override async UniTask StateStart() {
             Debug.LogError("============ ShowLoginUIState: 展示登录界面...");
             SetNext<ShowLoadingUIState>();
-            yield break;
+            await UniTask.Yield();
         }
     }
 }

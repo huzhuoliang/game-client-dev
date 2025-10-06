@@ -1,11 +1,12 @@
 using System;
-using System.Collections;
+using Cysharp.Threading.Tasks;
 
 namespace Game.StateMachine {
     [Serializable]
     public abstract class State {
         private State _nextState;
-        public abstract IEnumerator Start();
+
+        public abstract UniTask Start();
 
         protected void SetNext(State state) {
             _nextState = state;

@@ -1,11 +1,11 @@
 using System;
-using System.Collections;
+using Cysharp.Threading.Tasks;
 
 namespace Game.Login {
     [Serializable]
     public sealed class ShowLoadingUIState : LoginStateBase {
-        protected override IEnumerator StateStart() {
-            yield break;
+        protected override async UniTask StateStart() {
+            await UniTask.Yield();
         }
     }
 }

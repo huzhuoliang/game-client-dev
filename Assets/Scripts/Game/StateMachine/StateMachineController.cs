@@ -1,8 +1,7 @@
 using System;
-using System.Collections;
+using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
-using Game.CoroutineExtensions;
 
 namespace Game.StateMachine {
     [Serializable]
@@ -11,17 +10,22 @@ namespace Game.StateMachine {
         [LabelText("Current State")]
         public State CurrState { get; private set; }
 
-        public IEnumerator Start(State state) {
-            if (state == null) {
-                yield break;
+        public async UniTask Start(State initialState) {
+            if (initialState == null) {
+                return;
             }
 
-            while (state != null) {
-                CurrState = state;
-                IEnumerator routine = state.Start();
+            while (initialState != null) {
+                CurrState = initialState;
+
+                try {
+                    await initialState.Start();
+                } catch (Exception e) {
+                    Debug.LogException(e);
+                }
+
                 // 捕获协程异常并输出，避免某个状态异常以后整个状态机停止
-                yield return CoroutineExtension.WrapCoroutine(routine, Debug.LogException);
-                state = state.GetNext();
+                initialState = initialState.GetNext();
             }
         }
     }

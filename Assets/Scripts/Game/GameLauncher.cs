@@ -1,3 +1,4 @@
+using Cysharp.Threading.Tasks;
 using Game.Login;
 using Game.UI;
 using Net.Mono;
@@ -30,7 +31,7 @@ namespace Game {
                     .SetUIManager(_uiManager)
                     .SetGameClient(_gameClient);
             // Start
-            StartCoroutine(_stateMachine.StateMachine.StartStateMachine());
+            _stateMachine.StateMachine.StartStateMachine().Forget();
         }
     }
 }

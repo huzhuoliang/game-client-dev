@@ -1,13 +1,13 @@
 using System;
-using System.Collections;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace Game.Login {
     [Serializable]
     public sealed class AppStartState : LoginStateBase {
-        protected override IEnumerator StateStart() {
+        protected override async UniTask StateStart() {
             Debug.LogError("============ AppStartState: 初始化游戏...");
-            yield return new WaitForEndOfFrame();
+            await UniTask.NextFrame();
             SetNext<ShowAppLoadingUIState>();
         }
     }

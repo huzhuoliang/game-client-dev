@@ -1,5 +1,5 @@
 using System;
-using System.Collections;
+using Cysharp.Threading.Tasks;
 using Game.StateMachine;
 
 namespace Game.Login {
@@ -18,12 +18,12 @@ namespace Game.Login {
             StateMachine = stateMachine;
         }
 
-        public override IEnumerator Start() {
+        public override async UniTask Start() {
             if (StateMachine == null) {
-                yield break;
+                return;
             }
 
-            yield return StateStart();
+            await StateStart();
         }
 
         protected void SetNext<T>() where T : LoginStateBase {
@@ -34,6 +34,6 @@ namespace Game.Login {
             SetNext(StateMachine.GetState<T>());
         }
 
-        protected abstract IEnumerator StateStart();
+        protected abstract UniTask StateStart();
     }
 }
