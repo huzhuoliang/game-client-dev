@@ -8,9 +8,12 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/ABTestScene.unity
     guid: 99c9720ab356a0642a771bea13969a05
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/TimelineTest.unity
     guid: 6972017ee7c0063408218682c4afd0d0
+  - enabled: 1
+    path: Assets/Scenes/GameClient.unity
+    guid: 20fdd2c9be0e37044b3639c8d0d6eae7
   m_configObjects:
     com.unity.addressableassets: {fileID: 11400000, guid: e53fb831f8b342f43be57225fe0509bf,
       type: 2}

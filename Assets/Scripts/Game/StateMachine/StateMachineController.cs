@@ -20,8 +20,7 @@ namespace Game.StateMachine {
                 CurrState = state;
                 IEnumerator routine = state.Start();
                 // 捕获协程异常并输出，避免某个状态异常以后整个状态机停止
-                routine = CoroutineExtension.WrapCoroutine(routine, Debug.LogException);
-                yield return routine;
+                yield return CoroutineExtension.WrapCoroutine(routine, Debug.LogException);
                 state = state.GetNext();
             }
         }

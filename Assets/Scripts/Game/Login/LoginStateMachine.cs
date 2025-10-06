@@ -15,9 +15,10 @@ namespace Game.Login {
 
         private readonly Dictionary<Type, LoginStateBase> _states = new();
 
-        public readonly LoginStateMachineContext Context = new();
+        public LoginStateMachineContext Context { get; private set; }
 
         public void Init() {
+            Context = new LoginStateMachineContext();
             List<Type> subTypes = GetAllSubClass(typeof(LoginStateBase));
             foreach (Type type in subTypes) {
                 LoginStateBase state = (LoginStateBase)Activator.CreateInstance(type);
