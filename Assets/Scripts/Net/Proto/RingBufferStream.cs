@@ -59,7 +59,7 @@ public class RingBufferStream : IDisposable {
         Array.Copy(_buffer, _readPos, buffer, offset, firstPart);
         int remaining = count - firstPart;
         if (remaining > 0) {
-            Array.Copy(_buffer, 0, buffer, offset = firstPart, remaining);
+            Array.Copy(_buffer, 0, buffer, offset + firstPart, remaining);
         }
     }
 
