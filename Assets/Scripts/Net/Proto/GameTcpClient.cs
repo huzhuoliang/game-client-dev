@@ -6,13 +6,11 @@ using System.Net.Sockets;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
-using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using Game.Util;
 using GameServerServices.MessageType;
 using Google.Protobuf;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace Net.Proto {
     public class GameTcpClient : IDisposable {
@@ -106,7 +104,12 @@ namespace Net.Proto {
             }
         }
 
-        public async UniTask StartConnectionAsync(string addr, int port, int timeoutMs = 5000, int retryDelayMs = 1000, int maxAttempts = 10) {
+        public async UniTask StartConnectionAsync(
+                string addr,
+                int port,
+                int timeoutMs = 5000,
+                int retryDelayMs = 1000,
+                int maxAttempts = 10) {
             if (_isClosing) {
                 return;
             }
@@ -116,7 +119,12 @@ namespace Net.Proto {
             await StartConnectionInternalAsync(addr, port, timeoutMs, retryDelayMs, maxAttempts, _cts.Token);
         }
 
-        private async UniTask StartConnectionInternalAsync(string addr, int port, int timeoutMs = 5000, int retryDelayMs = 1000, int maxAttempts = 10, CancellationToken token = default) {
+        private async UniTask StartConnectionInternalAsync(string addr,
+                int port,
+                int timeoutMs,
+                int retryDelayMs,
+                int maxAttempts,
+                CancellationToken token) {
             Init();
             bool success = false;
             try {
@@ -165,7 +173,7 @@ namespace Net.Proto {
 
             SslStream sslStream = new SslStream(_client.GetStream(), false, ValidateSeverCertificate);
             SslClientAuthenticationOptions options = new() { TargetHost = "localhost" };
-            await sslStream.AuthenticateAsClientAsync(options, token);
+            await sslStream.AuthenticateAsClientAsync(options, token).AsUniTask();
             _stream = sslStream;
 
             return true;
@@ -204,7 +212,11 @@ namespace Net.Proto {
             }
         }
 
-        private static bool ValidateSeverCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors) {
+        private static bool ValidateSeverCertificate(
+                object sender,
+                X509Certificate certificate,
+                X509Chain chain,
+                SslPolicyErrors sslPolicyErrors) {
             return sslPolicyErrors == SslPolicyErrors.None;
         }
 
