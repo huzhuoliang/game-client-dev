@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Game.StateMachine;
 using System;
 using System.Collections;
+using System.Threading;
 using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 
@@ -49,8 +50,8 @@ namespace Game.Login {
             return list;
         }
 
-        public async UniTask StartStateMachine() {
-            await _stateMachineController.Start(GetState<AppStartState>());
+        public async UniTask StartStateMachine(CancellationToken token = default) {
+            await _stateMachineController.Start(GetState<AppStartState>(), token);
         }
     }
 }

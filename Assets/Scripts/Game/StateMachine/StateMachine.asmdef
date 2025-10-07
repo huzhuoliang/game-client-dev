@@ -2,7 +2,6 @@
     "name": "StateMachine",
     "rootNamespace": "Game.StateMachine",
     "references": [
-        "GUID:0905b8a059bc4b6980ecdf6b817e251b",
         "GUID:f51ebe6a0ceec4240a699833d6309b23"
     ],
     "includePlatforms": [],

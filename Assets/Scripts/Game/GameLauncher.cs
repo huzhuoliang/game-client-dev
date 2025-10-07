@@ -31,7 +31,7 @@ namespace Game {
                     .SetUIManager(_uiManager)
                     .SetGameClient(_gameClient);
             // Start
-            _stateMachine.StateMachine.StartStateMachine().Forget();
+            _stateMachine.StateMachine.StartStateMachine(this.GetCancellationTokenOnDestroy()).Forget();
         }
     }
 }

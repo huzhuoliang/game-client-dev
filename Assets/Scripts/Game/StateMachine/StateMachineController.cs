@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -10,7 +11,7 @@ namespace Game.StateMachine {
         [LabelText("Current State")]
         public State CurrState { get; private set; }
 
-        public async UniTask Start(State initialState) {
+        public async UniTask Start(State initialState, CancellationToken token = default) {
             if (initialState == null) {
                 return;
             }
@@ -19,7 +20,9 @@ namespace Game.StateMachine {
                 CurrState = initialState;
 
                 try {
-                    await initialState.Start();
+                    await initialState.Start(token);
+                } catch (OperationCanceledException e) {
+                    Debug.LogFormat("State Machine canceled. {0}", e);
                 } catch (Exception e) {
                     Debug.LogException(e);
                 }

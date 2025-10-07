@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Cysharp.Threading.Tasks;
 using Game.StateMachine;
 
@@ -18,12 +19,12 @@ namespace Game.Login {
             StateMachine = stateMachine;
         }
 
-        public override async UniTask Start() {
+        public sealed override async UniTask Start(CancellationToken token = default) {
             if (StateMachine == null) {
                 return;
             }
 
-            await StateStart();
+            await StateStart(token);
         }
 
         protected void SetNext<T>() where T : LoginStateBase {
@@ -34,6 +35,6 @@ namespace Game.Login {
             SetNext(StateMachine.GetState<T>());
         }
 
-        protected abstract UniTask StateStart();
+        protected abstract UniTask StateStart(CancellationToken token = default);
     }
 }
