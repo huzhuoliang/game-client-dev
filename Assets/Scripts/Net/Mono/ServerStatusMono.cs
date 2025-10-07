@@ -66,7 +66,7 @@ namespace Net.Mono {
         }
 
         private static ServerStatus GetServerStatus(GameClient client) {
-            if (client == null || !client.IsClientStart) {
+            if (client == null) {
                 return ServerStatus.Offline;
             }
 

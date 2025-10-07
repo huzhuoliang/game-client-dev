@@ -1,10 +1,9 @@
 using System;
 using System.Threading;
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using Net.Proto;
-using UnityEngine;
 
-public class RingBufferStream {
+public class RingBufferStream : IDisposable {
     private readonly byte[] _buffer;
     private readonly byte[] _tmpBuffer = new byte[1024];
     private int _readPos;
@@ -34,8 +33,8 @@ public class RingBufferStream {
         _dataAvailable.Release(length);
     }
 
-    public async Task<byte> ReadByteAsync(CancellationToken ct) {
-        await _dataAvailable.WaitAsync(ct);
+    public async UniTask<byte> ReadByteAsync(CancellationToken ct) {
+        await _dataAvailable.WaitAsync(ct).AsUniTask();
 
         byte value = _buffer[_readPos];
         _readPos = (_readPos + 1) % _capacity;
@@ -43,7 +42,7 @@ public class RingBufferStream {
         return value;
     }
 
-    public async Task PeekBytesAsync(byte[] buffer, int offset, int count, CancellationToken ct) {
+    public async UniTask PeekBytesAsync(byte[] buffer, int offset, int count, CancellationToken ct) {
         if (count <= 0) {
             return;
         }
@@ -53,7 +52,7 @@ public class RingBufferStream {
         }
 
         while (_count < count) {
-            await _dataAvailable.WaitAsync(ct);
+            await _dataAvailable.WaitAsync(ct).AsUniTask();
         }
 
         int firstPart = Math.Min(count, _capacity - _readPos);
@@ -64,7 +63,7 @@ public class RingBufferStream {
         }
     }
 
-    public async Task ReadBytesAsync(byte[] buffer, int offset, int count, CancellationToken ct) {
+    public async UniTask ReadBytesAsync(byte[] buffer, int offset, int count, CancellationToken ct) {
         if (count <= 0) {
             return;
         }
@@ -85,13 +84,17 @@ public class RingBufferStream {
         return 1;
     }
 
-    public async Task<uint> ReadUint32(CancellationToken ct) {
+    public async UniTask<uint> ReadUint32(CancellationToken ct) {
         await ReadBytesAsync(_tmpBuffer, 0, 4, ct);
         return _tmpBuffer.ToUInt32BigEndian();
     }
 
-    public async Task<ushort> ReadUint16(CancellationToken ct) {
+    public async UniTask<ushort> ReadUint16(CancellationToken ct) {
         await ReadBytesAsync(_tmpBuffer, 0, 2, ct);
         return _tmpBuffer.ToUInt16BigEndian();
+    }
+
+    public void Dispose() {
+        _dataAvailable?.Dispose();
     }
 }

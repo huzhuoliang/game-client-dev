@@ -7,13 +7,15 @@ using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using Game.Util;
 using GameServerServices.MessageType;
 using Google.Protobuf;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace Net.Proto {
-    public class GameTcpClient {
+    public class GameTcpClient : IDisposable {
         private const int MAGIC_NUMBER_SIZE = 4;
         private const int TYPE_SIZE = 2;
         private const int LENGTH_SIZE = 4;
@@ -37,51 +39,32 @@ namespace Net.Proto {
         private TcpClient _client;
 
         private SslStream _stream;
-        private CancellationTokenSource _cts;
 
         private readonly RingBufferStream _ringBufferStream = new();
 
         private readonly ArrayPool<byte> _bufferPool = ArrayPool<byte>.Shared;
 
-        //        public bool Connected {
-        //            get {
-        //                TcpClient client = _client;
-        //                try {
-        //                    if (client?.Client == null) return false;
-        //
-        //                    Socket socket = client.Client;
-        //                    return !(socket.Poll(1, SelectMode.SelectRead) && socket.Available == 0);
-        //                } catch {
-        //                    return false;
-        //                }
-        //            }
-        //        }
         public bool Connected { get; private set; }
-
-        public bool IsStart { get; private set; }
-
-        private bool _isClientClosing;
-
-        private bool _hasClosed; // 确保 OnClose 事件只被调用一次
 
         public event Action OnClose;
 
-        private CancellationTokenSource _attemptConnectCts;
-        private CancellationTokenSource _connectTimeoutCts;
+        private CancellationTokenSource _cts;
 
-        private Task _listenTask;
-        private Task _parseTask;
+        private bool _isInit;
+
+        private UniTask? _listenTask;
+        private UniTask? _parseTask;
+        private bool _isClosing;
 
         private void Init() {
-            if (IsStart) {
+            if (_isInit) {
                 return;
             }
 
             RegisterAll();
-            IsStart = true;
             Connected = false;
-            _isClientClosing = false;
-            _hasClosed = false;
+            _isInit = true;
+            _isClosing = false;
         }
 
         private static void RegisterAll() {
@@ -123,66 +106,101 @@ namespace Net.Proto {
             }
         }
 
-        public async Task StartConnectionAsync(string addr, int port, int timeoutMs = 5000, int retryDelayMs = 1000, int maxAttempts = 10) {
-            Init();
-            if (!IsStart) {
+        public async UniTask StartConnectionAsync(string addr, int port, int timeoutMs = 5000, int retryDelayMs = 1000, int maxAttempts = 10) {
+            if (_isClosing) {
                 return;
             }
 
-            _attemptConnectCts = new CancellationTokenSource();
+            CloseInternalAsync().Forget();
+            _cts = new CancellationTokenSource();
+            await StartConnectionInternalAsync(addr, port, timeoutMs, retryDelayMs, maxAttempts, _cts.Token);
+        }
+
+        private async UniTask StartConnectionInternalAsync(string addr, int port, int timeoutMs = 5000, int retryDelayMs = 1000, int maxAttempts = 10, CancellationToken token = default) {
+            Init();
             bool success = false;
-            for (int i = 0; i < maxAttempts && !_attemptConnectCts.IsCancellationRequested; i++) {
-                _connectTimeoutCts = new CancellationTokenSource(timeoutMs);
-                success = await TryConnectOnce(_connectTimeoutCts.Token, addr, port);
-                Connected = success;
-                if (success) {
-                    _addr = addr;
-                    _port = port;
-                    Debug.LogFormat("Connect {0}:{1} success", addr, port);
-                    break;
-                }
+            try {
+                for (int i = 0; i < maxAttempts; i++) {
+                    CancellationTokenSource ts = new(timeoutMs);
+                    CancellationTokenSource tsConn = CancellationTokenSource.CreateLinkedTokenSource(token, ts.Token);
+                    bool result = await TryConnectOnce(tsConn.Token, addr, port);
+                    success = result;
+                    Connected = success;
+                    if (success) {
+                        // ReSharper disable once PossiblyMistakenUseOfCancellationToken
+                        StartLoop(token);
+                        _addr = addr;
+                        _port = port;
+                        Debug.LogFormat("Connect to {0}:{1} success", addr, port);
+                        break;
+                    }
 
-                Debug.LogFormat("Connect {0}:{1} attempt {2}/{3} failed", addr, port, i + 1, maxAttempts);
+                    Debug.LogFormat("Connect to {0}:{1} attempt {2}/{3} failed", addr, port, i + 1, maxAttempts);
 
-                try {
-                    await Task.Delay(retryDelayMs, _attemptConnectCts.Token);
-                } catch (OperationCanceledException) {
-                    Debug.LogFormat("Connect {0}:{1} attempt {2}/{3} canceled", addr, port, i + 1, maxAttempts);
+                    if (retryDelayMs > 0) {
+                        // ReSharper disable once PossiblyMistakenUseOfCancellationToken
+                        await UniTask.Delay(millisecondsDelay: retryDelayMs, cancellationToken: token);
+                    }
                 }
+            } catch (OperationCanceledException) {
+                Debug.LogFormat("Connect to {0}:{1} canceled", addr, port);
             }
 
             if (!success) {
-                Debug.LogFormat("Connect {0}:{1} attempt abort", addr, port);
-                _ = Close();
+                Debug.LogFormat("Connect to {0}:{1} attempt abort", addr, port);
+                CloseInternalAsync().Forget();
+                OnClose?.Invoke();
             }
         }
 
-        private async Task<bool> TryConnectOnce(CancellationToken token, string addr, int port) {
+        private async UniTask<bool> TryConnectOnce(CancellationToken token, string addr, int port) {
+            if (_client != null) {
+                _client.Close();
+            }
+
+            _client = await TcpConnect(token, addr, port);
+            if (_client == null) {
+                return false;
+            }
+
+            SslStream sslStream = new SslStream(_client.GetStream(), false, ValidateSeverCertificate);
+            SslClientAuthenticationOptions options = new() { TargetHost = "localhost" };
+            await sslStream.AuthenticateAsClientAsync(options, token);
+            _stream = sslStream;
+
+            return true;
+        }
+
+        private void StartLoop(CancellationToken token) {
+            _listenTask = ListenLoopAsync(token);
+            _parseTask = ParseLoopAsync(token);
+        }
+
+        private static async UniTask<TcpClient> TcpConnect(CancellationToken token, string addr, int port) {
+            TcpClient tcpClient = new TcpClient();
             try {
-                _client = new TcpClient();
-                Task connectTask = _client.ConnectAsync(addr, port);
-                Task delayTask = Task.Delay(Timeout.Infinite, token);
-                Task finished = await Task.WhenAny(connectTask, delayTask);
-                if (finished != connectTask || !_client.Connected) {
-                    _client.Close();
-                    return false;
+                Debug.LogFormat("Try connect {0}:{1} ...", addr, port);
+                UniTask connectTask = tcpClient.ConnectAsync(addr, port).AsUniTask();
+                UniTask cancelTask = UniTask.WaitUntilCanceled(token);
+                int index = await UniTask.WhenAny(connectTask, cancelTask);
+                if (index == 1) {
+                    tcpClient.Close();
+                    return null;
                 }
 
-                SslStream sslStream = new SslStream(_client.GetStream(), false, ValidateSeverCertificate);
-                await sslStream.AuthenticateAsClientAsync("localhost");
-
-                _stream = sslStream;
-
-                _cts = new CancellationTokenSource();
-                _listenTask = ListenLoopAsync(_cts.Token);
-                _parseTask = ParseLoopAsync(_cts.Token);
-                return true;
-            } catch (OperationCanceledException) {
-                Debug.LogError("Connect cancelled by user");
-                return false;
-            } catch (Exception ex) {
-                Debug.LogErrorFormat("Connect attempt failed:\n{0}", ex);
-                return false;
+                return tcpClient;
+            } catch (Exception) when (token.IsCancellationRequested) {
+                /* Task cancelled */
+                tcpClient.Close();
+                return null;
+            } catch (SocketException e) {
+                Debug.LogFormat("Connect failed.\n{0}", e);
+                tcpClient.Close();
+                return null;
+            } catch (Exception e) {
+                Debug.LogErrorFormat("Connect failed.\n{0}", e);
+                tcpClient.Close();
+                return null;
             }
         }
 
@@ -190,61 +208,35 @@ namespace Net.Proto {
             return sslPolicyErrors == SslPolicyErrors.None;
         }
 
-        public async Task Close() {
-            try {
-                _isClientClosing = true;
-                _cts?.Cancel();
-
-                if (_listenTask != null) {
-                    await _listenTask;
-                    _listenTask = null;
-                }
-
-                if (_parseTask != null) {
-                    await _parseTask;
-                    _parseTask = null;
-                }
-
-                _cts?.Dispose();
-                _cts = null;
-
-                UnRegisterAll();
-                CloseTokenSource(ref _connectTimeoutCts);
-                CloseTokenSource(ref _attemptConnectCts);
-                if (_stream != null) {
-                    _stream.Close();
-                    await _stream.DisposeAsync();
-                    _stream = null;
-                }
-
-                _client?.Close();
-                _client?.Dispose();
-                _client = null;
-                IsStart = false;
-
-                InvokeOnClose();
-            } catch (Exception e) {
-                Debug.LogErrorFormat("Exception during close: {0}", e.Message);
-                throw;
-            }
+        public void Close() {
+            CloseInternalAsync().Forget();
+            OnClose?.Invoke();
         }
 
-        private void InvokeOnClose() {
-            if (_hasClosed) {
+        private async UniTask CloseInternalAsync() {
+            if (_isClosing) {
                 return;
             }
-
-            _hasClosed = true;
-            Debug.LogFormat("Connect {0}:{1} closed", _addr, _port);
-            OnClose?.Invoke();
-            _isClientClosing = false;
-        }
-
-
-        private static void CloseTokenSource(ref CancellationTokenSource cts) {
-            cts?.Cancel();
-            cts?.Dispose();
-            cts = null;
+            _isClosing = true;
+            _cts?.Cancel();
+            _stream?.Close();
+            _stream?.DisposeAsync();
+            _stream = null;
+            if (_listenTask.HasValue) {
+                await _listenTask.Value;
+            }
+            _listenTask = null;
+            if (_parseTask.HasValue) {
+                await _parseTask.Value;
+            }
+            _parseTask = null;
+            _client?.Close();
+            _client?.Dispose();
+            _client = null;
+            _cts?.Dispose();
+            _cts = null;
+            Connected = false;
+            _isClosing = false;
         }
 
         public void SendMessage(MessageType messageType, IMessage message) {
@@ -267,33 +259,26 @@ namespace Net.Proto {
             _stream.Write(payload, 0, payload.Length);
         }
 
-        private async Task ListenLoopAsync(CancellationToken ct) {
+        private async UniTask ListenLoopAsync(CancellationToken ct) {
             try {
                 byte[] temp = new byte[1024];
                 while (!ct.IsCancellationRequested) {
-                    // ReSharper disable once MethodSupportsCancellation
-                    Task<int> readTask = _stream.ReadAsync(temp, 0, temp.Length);
-                    Task cancelTask = Task.Delay(Timeout.Infinite, ct);
-                    Task finishedTask = await Task.WhenAny(readTask, cancelTask);
-                    if (finishedTask == cancelTask) {
-                        throw new OperationCanceledException(ct);
-                    }
-
-                    int read = await readTask;
+                    int read = await _stream.ReadAsync(temp, 0, temp.Length, ct).AsUniTask();
                     if (read == 0) {
                         throw new IOException("Disconnected");
                     }
 
                     _ringBufferStream.Push(temp, 0, read);
                 }
+            } catch (ObjectDisposedException) {
+                // _stream 被 Disposed 掉了
             } catch (OperationCanceledException) {
                 // 连接结束: 主动断开
             } catch (IOException e) {
-                if (_isClientClosing) {
-                    // 连接结束: 主动断开
-                } else if (e.Message.Equals("Disconnected")) {
+                if (e.Message.Equals("Disconnected")) {
                     // 连接结束: 服务器断开连接
-                    _ = Close();
+                    CloseInternalAsync().Forget();
+                    OnClose?.Invoke();
                 } else {
                     // 连接结束
                     Debug.LogErrorFormat("连接结束: {0}", e);
@@ -301,13 +286,10 @@ namespace Net.Proto {
             } catch (Exception e) {
                 // 连接异常
                 Debug.LogErrorFormat("连接异常: {0}", e);
-            } finally {
-                // 连接结束
-                InvokeOnClose();
             }
         }
 
-        private async Task ParseLoopAsync(CancellationToken ct) {
+        private async UniTask ParseLoopAsync(CancellationToken ct) {
             while (!ct.IsCancellationRequested) {
                 try {
                     bool haveMagicNumber = await ParseMagicNumber(ct);
@@ -320,7 +302,7 @@ namespace Net.Proto {
             }
         }
 
-        private async Task<bool> ParseMagicNumber(CancellationToken ct) {
+        private async UniTask<bool> ParseMagicNumber(CancellationToken ct) {
             int matched = 0;
             while (matched < MAGIC_NUMBER_SIZE && !ct.IsCancellationRequested) {
                 byte b = await _ringBufferStream.ReadByteAsync(ct);
@@ -338,7 +320,7 @@ namespace Net.Proto {
             return true;
         }
 
-        private async Task ParseOther(CancellationToken ct) {
+        private async UniTask ParseOther(CancellationToken ct) {
             ushort msgType = await _ringBufferStream.ReadUint16(ct);
             MessageType messageType = (MessageType)msgType;
             int length = (int)await _ringBufferStream.ReadUint32(ct);
@@ -373,6 +355,17 @@ namespace Net.Proto {
             } finally {
                 _bufferPool.Return(dataBuffer);
             }
+        }
+
+        public void Dispose() {
+            UnRegisterAll();
+            _client?.Dispose();
+            _client = null;
+            _stream?.Dispose();
+            _stream = null;
+            _cts?.Dispose();
+            _cts = null;
+            _ringBufferStream?.Dispose();
         }
     }
 }
