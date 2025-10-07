@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using Game.StateMachine;
 using System;
-using System.Collections;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
