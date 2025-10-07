@@ -15,8 +15,9 @@ using UnityEngine;
 namespace Net.Proto {
     public class GameTcpClient : IDisposable {
         private const int MAGIC_NUMBER_SIZE = 4;
-        private const int TYPE_SIZE = 2;
-        private const int LENGTH_SIZE = 4;
+
+        // private const int TYPE_SIZE = 2;
+        // private const int LENGTH_SIZE = 4;
         // private const int CRC_SIZE = 4;
 
         private const uint MAGIC_NUMBER = 0xCAFEBABE;
@@ -25,8 +26,11 @@ namespace Net.Proto {
 
         private byte[] MagicNumberBytes => _magicNumberBytes ??= MAGIC_NUMBER.GetBytesBigEndian();
 
-        private string _addr = "192.168.50.16";
-        private int _port = 50052;
+        // ReSharper disable once UnusedAutoPropertyAccessor.Global
+        public string Addr { get; private set; }
+
+        // ReSharper disable once UnusedAutoPropertyAccessor.Global
+        public int Port { get; private set; }
 
         /// <summary>
         /// [Magic] [Type] [Length] [CRC32] [Body]
@@ -137,8 +141,8 @@ namespace Net.Proto {
                     if (success) {
                         // ReSharper disable once PossiblyMistakenUseOfCancellationToken
                         StartLoop(token);
-                        _addr = addr;
-                        _port = port;
+                        Addr = addr;
+                        Port = port;
                         Debug.LogFormat("Connect to {0}:{1} success", addr, port);
                         break;
                     }
@@ -352,12 +356,10 @@ namespace Net.Proto {
                     Debug.LogErrorFormat("[Client] CRC check failed: messageType={0}", messageType);
                     return;
                 }
-
                 if (!MessageHandlerRegistry.Instance.TryGetHandler(messageType, out IMessageHandlerWrapper wrapper)) {
                     Debug.LogErrorFormat("[Client] No message handler: messageType={0}", messageType);
                     return;
                 }
-
                 IMessage msg = wrapper.CreateMessage();
                 msg.MergeFrom(new CodedInputStream(dataBuffer, 0, length));
                 wrapper.Handle(msg);
