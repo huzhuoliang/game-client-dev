@@ -14,7 +14,6 @@ namespace Game.Login {
 
         protected override async UniTask StateStart(CancellationToken token = default) {
             LoginStateMachineContext context = StateMachine.Context;
-            Debug.LogError("============ ShowAppLoadingUIState: 显示加载UI ...");
             AppLoadingWindow window = context.UIManager.ShowWindow<AppLoadingWindow>();
             while (!context.GameClient.IsClientConnected) {
                 await TryConnect(window, token);

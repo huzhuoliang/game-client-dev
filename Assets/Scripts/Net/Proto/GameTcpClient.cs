@@ -58,11 +58,30 @@ namespace Net.Proto {
         private UniTask? _parseTask;
         private bool _isClosing;
 
+        #region StateMachine
+
+        public ETcpConnectionState State { get; private set; } = ETcpConnectionState.None;
+
+        public event Action<ETcpConnectionState, ETcpConnectionState> OnStateChanged;
+
+        private void ChangeState(ETcpConnectionState nextState) {
+            if (State == nextState) {
+                return;
+            }
+
+            ETcpConnectionState prevState = State;
+            State = nextState;
+            Debug.LogErrorFormat("============ ChangeState {0} -> {1}", prevState, nextState);
+            OnStateChanged?.Invoke(prevState, nextState);
+        }
+
+        #endregion
+
         private void Init() {
             if (_isInit) {
                 return;
             }
-
+            ChangeState(ETcpConnectionState.Init);
             RegisterAll();
             Connected = false;
             _isInit = true;
@@ -117,19 +136,19 @@ namespace Net.Proto {
             if (_isClosing) {
                 return;
             }
-
-            CloseInternalAsync().Forget();
             _cts = new CancellationTokenSource();
             await StartConnectionInternalAsync(addr, port, timeoutMs, retryDelayMs, maxAttempts, _cts.Token);
         }
 
-        private async UniTask StartConnectionInternalAsync(string addr,
+        private async UniTask StartConnectionInternalAsync(
+                string addr,
                 int port,
                 int timeoutMs,
                 int retryDelayMs,
                 int maxAttempts,
                 CancellationToken token) {
             Init();
+            ChangeState(ETcpConnectionState.Connecting);
             bool success = false;
             try {
                 for (int i = 0; i < maxAttempts; i++) {
@@ -139,6 +158,7 @@ namespace Net.Proto {
                     success = result;
                     Connected = success;
                     if (success) {
+                        ChangeState(ETcpConnectionState.Connected);
                         // ReSharper disable once PossiblyMistakenUseOfCancellationToken
                         StartLoop(token);
                         Addr = addr;
@@ -146,9 +166,7 @@ namespace Net.Proto {
                         Debug.LogFormat("Connect to {0}:{1} success", addr, port);
                         break;
                     }
-
-                    Debug.LogFormat("Connect to {0}:{1} attempt {2}/{3} failed", addr, port, i + 1, maxAttempts);
-
+                    Debug.LogFormat("{0}/{1} Connect to {2}:{3} failed", i + 1, maxAttempts, addr, port);
                     if (retryDelayMs > 0) {
                         // ReSharper disable once PossiblyMistakenUseOfCancellationToken
                         await UniTask.Delay(millisecondsDelay: retryDelayMs, cancellationToken: token);
@@ -157,8 +175,8 @@ namespace Net.Proto {
             } catch (OperationCanceledException) {
                 Debug.LogFormat("Connect to {0}:{1} canceled", addr, port);
             }
-
             if (!success) {
+                Debug.LogErrorFormat("============ 连接结束 - 当前状态：{0}", State);
                 Debug.LogFormat("Connect to {0}:{1} attempt abort", addr, port);
                 CloseInternalAsync().Forget();
                 OnClose?.Invoke();
@@ -233,6 +251,7 @@ namespace Net.Proto {
             if (_isClosing) {
                 return;
             }
+            ChangeState(ETcpConnectionState.Disconnecting);
             _isClosing = true;
             _cts?.Cancel();
             _stream?.Close();
@@ -253,6 +272,7 @@ namespace Net.Proto {
             _cts = null;
             Connected = false;
             _isClosing = false;
+            ChangeState(ETcpConnectionState.Disconnected);
         }
 
         public void SendMessage(MessageType messageType, IMessage message) {
@@ -301,19 +321,15 @@ namespace Net.Proto {
                 }
             } catch (Exception e) {
                 // 连接异常
-                Debug.LogErrorFormat("连接异常: {0}", e);
+                Debug.LogErrorFormat("TCP 连接异常: {0}", e);
             }
         }
 
         private async UniTask ParseLoopAsync(CancellationToken ct) {
             while (!ct.IsCancellationRequested) {
-                try {
-                    bool haveMagicNumber = await ParseMagicNumber(ct);
-                    if (haveMagicNumber) {
-                        await ParseOther(ct);
-                    }
-                } catch (OperationCanceledException) {
-                    // 主动取消
+                bool haveMagicNumber = await ParseMagicNumber(ct);
+                if (haveMagicNumber) {
+                    await ParseOther(ct);
                 }
             }
         }
@@ -325,11 +341,7 @@ namespace Net.Proto {
                 if (b == MagicNumberBytes[matched]) {
                     matched++;
                 } else {
-                    if (b == MagicNumberBytes[0]) {
-                        matched = 1;
-                    } else {
-                        matched = 0;
-                    }
+                    matched = b == MagicNumberBytes[0] ? 1 : 0;
                 }
             }
 
