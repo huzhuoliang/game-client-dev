@@ -9,7 +9,8 @@ namespace Net.Proto {
         private CancellationTokenSource _cts;
 
         private void Awake() {
-            _stateMachine = new TcpClientStateMachine();
+            TcpClientFSMCtx ctx = new("192.168.50.16", 50052);
+            _stateMachine = new TcpClientStateMachine(ctx);
         }
 
         private void OnEnable() {

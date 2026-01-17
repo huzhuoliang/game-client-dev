@@ -2,15 +2,14 @@ using System;
 using System.Reflection;
 using System.Threading;
 using Cysharp.Threading.Tasks;
-using UnityEngine;
 
 namespace Net.Proto.State {
-    public class Init : TcpClientStateBase {
-        public override async UniTask RunAsync(TcpClientFSMCtx ctx, CancellationToken ct = default) {
-            Debug.LogErrorFormat("============ Init.RunAsync");
+    public sealed class Init : TcpClientStateBase {
+        protected override UniTask RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct = default) {
             RegisterAll();
             SetNext<Connecting>();
-            await UniTask.Yield();
+            ct.ThrowIfCancellationRequested();
+            return UniTask.CompletedTask;
         }
 
         private static void RegisterAll() {

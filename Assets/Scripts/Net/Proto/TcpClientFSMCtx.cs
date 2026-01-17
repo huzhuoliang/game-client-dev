@@ -1,4 +1,5 @@
 using System;
+using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
@@ -10,18 +11,50 @@ namespace Net.Proto {
     /// <summary>
     /// Tcp Client State Machine Context
     /// </summary>
-    public sealed class TcpClientFSMCtx : IDisposable {
-        public string Addr;
-        public int Port;
+    public sealed class TcpClientFSMCtx : ITcpClientFSMCtx {
+        public IPEndPoint TargetEndPoint { get; private set; }
 
-        public int MaxAttempts = 10;
-        public int TimeoutMs = 5000;
-        public int RetryDelayMs = 1000;
+        public int MaxAttempts { get; private set; }
+
+        public int TimeoutMs { get; private set; }
+
+        public int RetryDelayMs { get; private set; }
 
         private TcpClient _client;
         public TcpClient Client => _client;
 
         private SslStream _stream;
+
+        public TcpClientFSMCtx(
+                IPEndPoint targetEndPoint,
+                int maxAttempts = 10,
+                int timeoutMs = 5000,
+                int retryDelayMs = 1000
+        ) {
+            TargetEndPoint = targetEndPoint;
+            MaxAttempts = maxAttempts;
+            TimeoutMs = timeoutMs;
+            RetryDelayMs = retryDelayMs;
+        }
+
+        public TcpClientFSMCtx(
+                string host,
+                int port,
+                int maxAttempts = 10,
+                int timeoutMs = 5000,
+                int retryDelayMs = 1000
+        ) : this(CreateEndPointFromHost(host, port), maxAttempts, timeoutMs, retryDelayMs) { }
+
+        private static IPEndPoint CreateEndPointFromHost(string host, int port) {
+            IPAddress ip;
+            if (IPAddress.TryParse(host, out IPAddress addr)) {
+                ip = addr;
+            } else {
+                ip = Dns.GetHostAddressesAsync(host).AsUniTask().GetAwaiter().GetResult()[0];
+            }
+            IPEndPoint targetEndPoint = new IPEndPoint(ip, port);
+            return targetEndPoint;
+        }
 
         public async UniTask<TcpClient> Connect(CancellationToken ct) {
             CancellationTokenSource cts = new(TimeoutMs);
@@ -32,7 +65,7 @@ namespace Net.Proto {
 
         private async UniTask<TcpClient> ConnectOnce(CancellationToken ct) {
             DisposeTcpClient(ref _client);
-            _client = await CreateTcpClientAndConnect(Addr, Port, ct);
+            _client = await CreateTcpClientAndConnect(TargetEndPoint, ct);
             if (_client == null) {
                 return null;
             }
@@ -51,11 +84,11 @@ namespace Net.Proto {
             return sslPolicyErrors == SslPolicyErrors.None;
         }
 
-        private static async UniTask<TcpClient> CreateTcpClientAndConnect(string addr, int port, CancellationToken ct) {
+        private static async UniTask<TcpClient> CreateTcpClientAndConnect(IPEndPoint ipEndPoint, CancellationToken ct) {
             TcpClient tcpClient = new TcpClient();
             try {
-                Debug.LogFormat("Try connect {0}:{1} ...", addr, port);
-                UniTask connectTask = tcpClient.ConnectAsync(addr, port).AsUniTask();
+                Debug.LogFormat("Try connect {0} ...", ipEndPoint);
+                UniTask connectTask = tcpClient.ConnectAsync(ipEndPoint.Address, ipEndPoint.Port).AsUniTask();
                 UniTask cancelTask = UniTask.WaitUntilCanceled(ct);
                 int index = await UniTask.WhenAny(connectTask, cancelTask);
                 if (index == 1) {
@@ -65,7 +98,7 @@ namespace Net.Proto {
 
                 return tcpClient;
             } catch (Exception) when (ct.IsCancellationRequested) {
-                /* Task cancelled */
+                /* Task canceled */
                 DisposeTcpClient(ref tcpClient);
                 return null;
             } catch (SocketException e) {

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using System;
+using UnityEngine;
 
 namespace Net.Proto.State {
     public abstract class TcpClientStateBase {
@@ -22,8 +23,15 @@ namespace Net.Proto.State {
             return (TTarget)instance;
         }
 
-        public abstract UniTask RunAsync(TcpClientFSMCtx ctx, CancellationToken ct = default);
-        public virtual void OnEnter(TcpClientFSMCtx ctx) { }
-        public virtual void OnExit(TcpClientFSMCtx ctx) { }
+        public UniTask RunAsync(ITcpClientFSMCtx ctx, CancellationToken ct = default) {
+            Debug.LogErrorFormat("============ RunAsync \"{0}\"", GetType());
+            return RunAsyncInternal(ctx, ct);
+        }
+
+        protected abstract UniTask RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct = default);
+
+        public virtual void OnEnter(ITcpClientFSMCtx ctx) { }
+
+        public virtual void OnExit(ITcpClientFSMCtx ctx) { }
     }
 }

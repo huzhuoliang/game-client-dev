@@ -6,9 +6,13 @@ using UnityEngine;
 
 namespace Net.Proto {
     public sealed class TcpClientStateMachine {
-        private readonly TcpClientFSMCtx _context = new();
+        private readonly ITcpClientFSMCtx _context;
 
         private TcpClientStateBase _state;
+
+        public TcpClientStateMachine(ITcpClientFSMCtx context) {
+            _context = context;
+        }
 
         public async UniTask StartAsync(TcpClientStateBase initState, CancellationToken token = default) {
             _state = initState;

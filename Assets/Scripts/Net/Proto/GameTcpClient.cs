@@ -220,7 +220,7 @@ namespace Net.Proto {
 
                 return tcpClient;
             } catch (Exception) when (token.IsCancellationRequested) {
-                /* Task cancelled */
+                /* Task canceled */
                 tcpClient.Close();
                 return null;
             } catch (SocketException e) {

@@ -2,8 +2,8 @@ using System.Threading;
 using Cysharp.Threading.Tasks;
 
 namespace Net.Proto.State {
-    public class Handshaking : TcpClientStateBase {
-        public override async UniTask RunAsync(TcpClientFSMCtx ctx, CancellationToken ct = default) {
+    public sealed class Handshaking : TcpClientStateBase {
+        protected override async UniTask RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct = default) {
             await UniTask.Yield();
         }
     }
