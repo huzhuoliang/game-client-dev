@@ -1,5 +1,9 @@
 # Game Client
 
+**English** | [中文](README_CN.md)
+
+---
+
 A Unity (2022.3.12f1) game client with a custom TCP networking framework built on SSL/TLS and Protocol Buffers.
 
 ## Networking Framework
