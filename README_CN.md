@@ -23,11 +23,11 @@
 所有多字节字段均为**大端序**。
 
 ```
-┌──────────┬──────────┬──────────┬──────────────┬──────────┐
-│  Magic   │   Type   │  Length  │     Body     │  CRC32   │
-│  4 字节  │  2 字节  │  4 字节  │   变长       │  4 字节  │
-│ CAFEBABE │  uint16  │  uint32  │  protobuf    │  uint32  │
-└──────────┴──────────┴──────────┴──────────────┴──────────┘
++----------+----------+----------+--------------+----------+
+|  Magic   |   Type   |  Length  |     Body     |  CRC32   |
+|  4 字节  |  2 字节  |  4 字节  |    变长      |  4 字节  |
+| CAFEBABE |  uint16  |  uint32  |  protobuf    |  uint32  |
++----------+----------+----------+--------------+----------+
 ```
 
 | 字段   | 大小    | 说明                                             |
@@ -42,11 +42,11 @@
 
 ```
 GameClient (MonoBehaviour)
-  └── GameTcpClient
-        ├── ListenLoopAsync   ──▶  从 SSL 流读取数据写入 RingBufferStream
-        ├── ParseLoopAsync    ──▶  消费帧数据，校验 CRC，分发消息
-        └── MessageHandlerRegistry (单例)
-              └── IMessageHandler<T>  ──▶  每种消息类型对应一个处理器
+  +-- GameTcpClient
+        |-- ListenLoopAsync        -->  从 SSL 流读取数据写入 RingBufferStream
+        |-- ParseLoopAsync         -->  消费帧数据，校验 CRC，分发消息
+        +-- MessageHandlerRegistry (单例)
+              +-- IMessageHandler<T>  -->  每种消息类型对应一个处理器
 ```
 
 **`GameClient`** (`Assets/Scripts/Net/Mono/GameClient.cs`)
@@ -123,14 +123,14 @@ tcpClient.SendMessage(MessageType.MsgYourRequest, request);
 
 ```
 Assets/Scripts/
-├── Game/               # 应用生命周期、状态机、UI、相机
-│   ├── StateMachine/   # 通用异步状态机框架
-│   ├── Login/          # 登录流程状态
-│   └── UI/             # 窗口管理 (UIManager, GameWindowBase)
-├── Net/
-│   ├── Proto/          # TCP 客户端、环形缓冲区、处理器注册表、扩展方法
-│   ├── Tcp/            # 具体消息处理器
-│   └── Mono/           # MonoBehaviour 封装 (GameClient)
-├── proto/              # 生成的 protobuf C# 文件
-└── Util/               # CRC32、日志、AssetBundle 工具
+|-- Game/               # 应用生命周期、状态机、UI、相机
+|   |-- StateMachine/   # 通用异步状态机框架
+|   |-- Login/          # 登录流程状态
+|   +-- UI/             # 窗口管理 (UIManager, GameWindowBase)
+|-- Net/
+|   |-- Proto/          # TCP 客户端、环形缓冲区、处理器注册表、扩展方法
+|   |-- Tcp/            # 具体消息处理器
+|   +-- Mono/           # MonoBehaviour 封装 (GameClient)
+|-- proto/              # 生成的 protobuf C# 文件
++-- Util/               # CRC32、日志、AssetBundle 工具
 ```
