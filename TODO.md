@@ -7,10 +7,12 @@
 | 文件 | 状态 |
 |---|---|
 | `TcpClientStateBase` / `TcpClientStateMachine` / `ITcpClientFSMCtx` / `TcpClientFSMCtx` / `TcpClientStateMachineMono` | 骨架已搭好 |
-| `Init` | 真实实现（注册 handler → `SetNext<Connecting>`） |
-| `Connecting` | 部分实现（重试循环写了，但**没有 `SetNext`**） |
-| `Handshaking` / `Connected` / `Ready` / `Reconnecting` / `Disconnecting` / `Disconnected` / `Closed` | 全是 `await UniTask.Yield()` 占位 |
-| `GameTcpClient` 老代码 | 仍在跑，没人删，握手/收发/dispatch 还都在这边 |
+| `Init` | 真实实现（注册 handler → `Connecting`） |
+| `Connecting` | 真实实现（成功 → `Connected`，失败/TLS/重试耗尽 → `Disconnected`，OCE → `null`） |
+| `Connected` | 真实实现（`WhenAny(listen, parse)` → 任一退出 → `Disconnecting`；OCE → bubble） |
+| `Handshaking` / `Reconnecting` / `Disconnecting` / `Disconnected` / `Closed` | 全是 `await UniTask.Yield()` 占位 |
+| `Ready` | 已删除（合并到 `Connected`） |
+| `GameTcpClient` 老代码 | 仍在跑，没人删，listen/parse/SendMessage 也还都在这边 |
 
 ---
 
@@ -143,14 +145,129 @@ return GetInstance<Disconnected>();
 
 **未做的**：把 `AuthenticateAsClientAsync` 拆到独立 `Handshaking` 状态——推迟到真有需求时再做。
 
-### 4. 现在还是纯 "线性 next 指针" 模型，但 TCP 生命周期是事件驱动的
+### 4. ✅ 已修复（2026-05-08 联调通过）— `Connected` 是"稳态 + 事件驱动"的，但 FSM 是"线性 next 指针"模型
 
-老 `GameTcpClient` 的 `ListenLoopAsync` 一抛 `IOException("Disconnected")` 就会把对象切到 `Disconnecting`。新 FSM 还没有任何 "外部事件触发状态切换" 的通道。在写 `Ready` 之前必须决定：
+> **联调验证**：在 `TcpClientStateMachineMono` 上加临时 `[Button("Send HelloWorld")]`，发送 `HelloRequest` 给服务器，`TcpHelloWorldHandler` 收到 `HelloReply` 并输出日志。**收发 framing + listen/parse + handler dispatch 全链路通**。临时按钮代码归 #5（公共 `SendMessage` API 落地时一起替换）。
 
-- **A.** Ready 状态自己持有 listen/parse 循环，循环里 socket 断开就 `SetNext<Reconnecting>` 然后 return。`RunAsync` 直到断线才结束。
-- **B.** Ctx 暴露一个 `RequestTransition<T>()`，外部 loop 触发它，状态用 linked CTS 监听。
+> **决策（2026-05-08）**：原计划 `Connected → Ready` 两个状态，`Ready` 留作"业务握手完成"的扩展槽位。当前代码没有任何业务层握手（TLS 一通就直接 listen/parse 全速跑），保留 `Ready` 是对未实现需求的预留，违反 CLAUDE.md "Don't design for hypothetical future requirements"。**砍掉 `Ready`，listen/parse 直接落到 `Connected`**；真有业务握手时再起 `Authenticating` / `Handshaking` 等具名状态。
 
-**建议**：先选 A，等以后真的需要外部强切（比如用户主动断开）再加 B。无论选哪个，老代码里 `_isClosing`、`OnClose` 那一坨布尔状态都不应该再带过来——FSM 本身就是状态。
+**问题本质**：
+
+现在的 FSM 是**"状态跑完一段有限工作 → return 下一个状态"**模型。这套模型对短命状态（`Init` / `Connecting` / `Disconnecting`）天然合适——它们都有清晰的开始、清晰的终点、清晰的下一站。
+
+但 `Connected` 不一样。`Connected` 是连接的**稳态（steady-state）**：socket 活着的整段时间它都在跑，可能几小时；本质不是"做完一件事"而是"**持续运行两条循环，等出事再换状态**"。`Connected` 同时要做三件事：
+
+1. **并发跑两条长时循环**：`ListenLoopAsync`（读 `_stream` → push 进 `RingBufferStream`）+ `ParseLoopAsync`（从 ring buffer 解帧 → 分发 handler）。
+2. **阻塞等待任意一种事件发生**：
+   - 哪条循环先抛异常 / 退出（socket EOF / `IOException` / 协议错误）
+   - `ct` 被取消（应用退出 / `Mono.OnDisable` 调 `_cts.Cancel()`）
+   - **未来**：外部主动请求转移（UI 点"登出" / 鉴权 token 过期 / 服务端推 kick 后业务层决定登出）
+3. **根据"是谁先唤醒了我"决定下一状态**：socket 错 → `Reconnecting`（如果允许自动重连，否则 `Disconnecting`）；主动 close → `Disconnecting`；`ct` 触发 → `return null`（FSM 干净退出，由 `StartAsync` 顶层 OCE catch 处理）。
+
+旧 `GameTcpClient` 的解法：`StartLoop()` 把 listen/parse 当 fire-and-forget 起来；listen 循环 catch 到 `IOException("Disconnected")` 就**直接在异常处理里调 `CloseInternalAsync()` 自己改状态**。这是典型的"在工作循环的异常处理里搞副作用式状态转移"——正是 FSM 重构想消除的乱麻。
+
+**核心矛盾**：
+
+FSM 模型要求 `RunAsyncInternal` 完整执行完才 return 下一个状态——意味着 `Connected.RunAsyncInternal` 必须在两条循环跑着的时候**自己内部阻塞**等它们出问题。这对状态本身可行（`UniTask.WhenAny` 一把搞定），但暴露了一个被忽视的问题：**外部代码（UI 登出、token 失效）想推动 `Connected → Disconnecting`，没有通道**。
+
+目前 FSM 没有"邮箱"。状态一旦在 `await`，外部唯一的干扰手段是取消 `ct`——但按当前语义（#1 已固化）取消 `ct` 表示"FSM 整个退出"而不是"切到下一状态"。两个语义需要分开。
+
+**两条出路**：
+
+- **A. `Connected` 内部 `WhenAny`，所有转移都靠状态内部驱动**
+
+  ```csharp
+  protected override async UniTask<TcpClientStateBase> RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct) {
+      using var disconnectCts = new CancellationTokenSource();   // 专用"软中断"
+      ctx.OnDisconnectRequested += disconnectCts.Cancel;          // 外部按钮 → 触发它
+      var listen = ListenLoopAsync(ctx, ct);
+      var parse  = ParseLoopAsync(ctx, ct);
+      try {
+          int idx = await UniTask.WhenAny(
+              listen, parse,
+              UniTask.WaitUntilCanceled(disconnectCts.Token)
+          );
+          // idx 0/1 = 循环出事 → Reconnecting/Disconnecting；idx 2 = 主动登出 → Disconnecting
+      } finally {
+          ctx.OnDisconnectRequested -= disconnectCts.Cancel;
+      }
+      return GetInstance<Disconnecting>(); // 简化：先一律 Disconnecting，自动重连归 #6
+  }
+  ```
+
+  - 优点：FSM 引擎不动；`Connected` 自己内聚，所有转移逻辑集中
+  - 缺点：每个长时状态都得自己起专用 CTS / 订阅事件；多了点样板
+
+- **B. ctx 提供 `RequestTransition<T>()`，FSM 引擎实现"软中断 + 强切"**
+
+  ctx 持有 `UniTaskCompletionSource<Type>`；状态用 `WhenAny(workTask, transitionTask)`；外部调 `RequestTransition<Disconnecting>()` 解析 CS，状态拿到目标类型直接 `return GetInstance<...>()`。
+
+  - 优点：外部代码一行就能切；调用方不用知道状态内部 CTS 细节
+  - 缺点：FSM 引擎复杂；状态实现者必须主动 await 这个 CS——容易漏；调用方还可能在错误状态请求错误转移（要不要校验？）
+
+**建议先走 A**：
+
+1. 当前真正要触发转移的事件全是**内部**（socket 错、IOException、ct 取消）——A 直接覆盖。
+2. 唯一可能要外部触发的是"用户主动断开"，但这功能还没写。功能落地时再判断要不要升 B；A 写法本身已经留了 `ctx.OnDisconnectRequested` 接入点，从 A 升 B 不是大动。
+3. A 几乎不动 FSM 引擎，风险低。
+
+**实现 `Connected` 时要顺手定的子问题**（依赖 #5 的部分先列在这里，以免漏）：
+
+- `RingBufferStream` 放哪？建议放 **ctx**——理由：Reconnecting 之后回到 `Connected` 时可复用同一个 ring（避免重新分配 + 短暂内存峰值）；同时统一 ctx 作为"所有 IO 资源宿主"。
+- `_stream`（`SslStream`）目前在 `TcpClientFSMCtx` 里是 `private`，`Connected` 要读它——ctx 要么暴露 `Stream NetworkStream { get; }`，要么把 listen/parse pump 搬进 ctx，`Connected` 调 `await ctx.PumpAsync(ct)`。**前者更直接**，且和 #5 一起做（ctx 同时给外部 `SendMessage` 一个写入入口，写也走 ctx）。
+- `Disconnecting` vs `Reconnecting` 怎么分——这是 #6。实现 #4 时先一律 `return Disconnecting`，自动重连留 #6 决定。
+
+**老代码里这次要彻底丢掉的**：
+
+- `_isClosing`、`OnClose` 那一坨布尔标志——FSM 本身就是状态，这些属于"在没有 FSM 时被迫造的状态机"，迁移完不要带过来。
+- 状态对象上的 `_listenTask` / `_parseTask` 字段——这俩 Task 应该是 `Connected.RunAsyncInternal` 的局部变量，状态对象（singleton）不能持有。
+- "在 listen 循环 catch 里调 close 切状态"的反模式——改成"循环退出 → WhenAny 唤醒 → `Connected` 决定下一状态"，单一职责。
+
+**实际落地代码**（`Assets/Scripts/Net/Proto/State/Connected.cs`）：
+
+```csharp
+protected override async UniTask<TcpClientStateBase> RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct = default) {
+    using CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+    UniTask listen = ListenLoopAsync(ctx, linkedCts.Token).Preserve();
+    UniTask parse  = ParseLoopAsync(ctx, linkedCts.Token).Preserve();
+
+    try {
+        int idx = await UniTask.WhenAny(listen, parse);
+        if (idx == 0) await listen; else await parse;  // 让先完成的循环把异常抛出
+    } catch (OperationCanceledException) {
+        throw;                                          // 顶层 ct 取消 → FSM 整体退出
+    } catch (Exception e) {
+        Debug.LogFormat("Connection broken: {0}", e.Message);
+    } finally {
+        linkedCts.Cancel();                             // 把另一条循环也叫停
+        try { await listen; } catch { /* expected */ }
+        try { await parse; }  catch { /* expected */ }
+    }
+    return GetInstance<Disconnecting>();
+}
+```
+
+ctx 同步加了两个属性（`Assets/Scripts/Net/Proto/ITcpClientFSMCtx.cs` + `TcpClientFSMCtx.cs`）：
+
+```csharp
+Stream NetworkStream { get; }       // = SslStream（SslStream : Stream）
+RingBufferStream RingBuffer { get; } // 整个 ctx 生命周期复用一个
+```
+
+**修复思路（4 点）**：
+
+1. **`linkedCts` 串两条循环 + 主 `ct`**——任一条循环死掉，进入 `finally` 后 `linkedCts.Cancel()` 把另一条也叫停，避免一个崩了另一个还在 `await` 的资源泄漏。`ct` 取消时也同步把循环带下。
+2. **`Preserve()` 才能 await 两次**——`UniTask` 默认只能 await 一次（struct 语义）；要在 `WhenAny` 之后再 await 拿异常 + 在 `finally` 里 drain，必须先 `Preserve()`。漏写会 InvalidOperationException。
+3. **OCE 透传，其他异常吞**——`ct.Cancel()` 进 catch OCE → `throw` → `StartAsync` 顶层 OCE 分支干净退出 FSM；`IOException` / 协议错误 / `ObjectDisposedException` 等被吞掉记日志，让出口走到 `Disconnecting` 状态做清理。这与 `Connecting` 的 OCE 处理对齐。
+4. **资源宿主统一在 ctx**——`RingBuffer` 由 ctx 持有的好处：以后 #6 实现 `Reconnecting → Connected` 回路时，可复用同一个 ring（避免 8KB 内存峰值）；`NetworkStream` 暴露成 `Stream` 而不是 `SslStream`，让 state 不依赖 TLS 细节，未来换 PlainStream 也不用改 state。
+
+**未做的（留给后续）**：
+
+- **`OnDisconnectRequested` 软中断事件**：设计里讨论过，但当前还没有真正的外部触发方（UI 登出按钮）。等需求落地再加，避免给 FSM 引擎加无人调用的 hook。从 `linkedCts` 升级到"再额外串一个 disconnect token"代码改动 < 5 行。
+- **socket 出错时区分 `Reconnecting` vs `Disconnecting`**：归 #6。当前一律 `Disconnecting`。
+- **`SendMessage` 的对外 API**：归 #5。`NetworkStream` 已经在 ctx 上能写，但还没有 framing/加锁/线程安全的发送入口。
+- **删除 `GameTcpClient` 老代码**：归 #7。当前 `GameTcpClient` 仍含 listen/parse 副本——让两套 FSM/老代码并存，便于回滚验证。
 
 ### 5. `ITcpClientFSMCtx.Connect` 接口设计有点拧
 
@@ -244,10 +361,13 @@ event Action<ConnectErrorKind, Exception> OnConnectFailed;
     - ⏸️ **未做的**：把 `AuthenticateAsClientAsync` 从 `ctx.Connect` 拆到独立 `Handshaking` 状态。这一步推迟到真的需要细分 SSL 握手 / 业务握手时再做。
     - 决策依据：状态机只代表 **TCP 网络层** 生命周期；游戏层（登录/选角/对局）单开 FSM 通过事件观察 TCP 状态，不混在一起。
 
-- [ ] **4. 写 `Ready` 状态——真正的硬骨头**：
-    - 把 `RingBufferStream`、`ListenLoopAsync`、`ParseLoopAsync` 从 `GameTcpClient` 搬过来
-    - 在 `Ready.RunAsync` 里 `WhenAny(listen, parse, ct)`
-    - 任何一个返回 / 抛 `IOException` → 状态切到 `Disconnecting` 或 `Reconnecting`（看是不是要自动重连）
+- [x] **4. 写 `Connected` 状态——真正的硬骨头**（已落地）：
+    - ✅ 删 `Assets/Scripts/Net/Proto/State/Ready.cs` + `.meta`
+    - ✅ ctx 暴露 `Stream NetworkStream { get; }` 和 `RingBufferStream RingBuffer { get; }`
+    - ✅ `Connected.RunAsyncInternal` 用 `linkedCts` + `UniTask.WhenAny(listen, parse)` + `Preserve()` + `finally` 中 drain
+    - ✅ OCE 透传 → `StartAsync` 顶层 catch；其他异常 → `Disconnecting`
+    - ⏸️ **未做**：外部"软中断"事件 `OnDisconnectRequested`——没有真正的调用方，等需求落地（UI 登出按钮）再加，从 `linkedCts` 升级 < 5 行
+    - ⏸️ **未做**：socket 错时区分 `Reconnecting`/`Disconnecting`——归 #6，当前一律 `Disconnecting`
 
 - [ ] **5. 设计公共 API 面**：`SendMessage` 现在没地方放。建议给 ctx 加一个 `IMessageSender`（持有 stream + 写入锁），任何状态阶段都能调；外部代码（`GameClient.cs`）也通过 ctx 调用，而不是直接调 state。
 

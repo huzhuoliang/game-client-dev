@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -20,6 +21,16 @@ namespace Net.Proto {
         /// 重试延迟（毫秒）
         /// </summary>
         int RetryDelayMs { get; }
+
+        /// <summary>
+        /// 已建立的 SSL 流；<see cref="Connect"/> 成功后才有值。<see cref="Connected"/> 状态读、外部 SendMessage 写。
+        /// </summary>
+        Stream NetworkStream { get; }
+
+        /// <summary>
+        /// listen / parse 循环之间共享的环形缓冲。整个 ctx 生命周期复用同一个，断线重连不重新分配。
+        /// </summary>
+        RingBufferStream RingBuffer { get; }
 
         /// <summary>
         /// 单次连接尝试失败时触发（每次失败/重试都会触发一次）。

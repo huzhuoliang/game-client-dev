@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -27,6 +28,10 @@ namespace Net.Proto {
         public TcpClient Client => _client;
 
         private SslStream _stream;
+        public Stream NetworkStream => _stream;
+
+        private readonly RingBufferStream _ringBuffer = new();
+        public RingBufferStream RingBuffer => _ringBuffer;
 
         public TcpClientFSMCtx(
                 IPEndPoint targetEndPoint,
@@ -147,6 +152,7 @@ namespace Net.Proto {
 
         public void Dispose() {
             DisposeTcpClient(ref _client);
+            _ringBuffer?.Dispose();
         }
     }
 }
