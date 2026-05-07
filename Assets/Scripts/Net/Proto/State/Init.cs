@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 
@@ -26,6 +27,9 @@ namespace Net.Proto.State {
         private static void RegisterAllByReflection() {
             Type handlerInterface = typeof(IMessageHandler<>);
 
+            StringBuilder sb = new StringBuilder();
+            sb.Append("AutoRegister: \n");
+            int index = 1;
             foreach (Type type in Assembly.GetExecutingAssembly().GetTypes()) {
                 if (!type.IsClass || type.IsAbstract) {
                     continue;
@@ -44,8 +48,12 @@ namespace Net.Proto.State {
                     MethodInfo registerMethod = typeof(MessageHandlerRegistry).GetMethod("Register");
                     registerMethod = registerMethod?.MakeGenericMethod(interfaceType.GenericTypeArguments[0]);
                     registerMethod?.Invoke(MessageHandlerRegistry.Instance, new[] { handlerInstance });
-                    // Debug.Log($"[AutoRegister] Registered {type.Name}");
+                    sb.Append($"{index} {type.Name}\n");
+                    index++;
                 }
+            }
+            if (index > 1) {
+                UnityEngine.Debug.Log(sb.ToString());
             }
         }
     }
