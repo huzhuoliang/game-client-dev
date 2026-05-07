@@ -99,9 +99,11 @@ while (_state != null) {
 **未变的事**：
 
 - `TcpClientStateMachine.StartAsync` 异常/取消处理（#1 已修过）保持不动。
-- 各状态之间的具体转移语义（成功该去哪、失败该去哪）保持现状不变；这是 #3 / #6 的工作。
+- 当时 #2 完成时各状态之间的具体转移语义还是占位（`return null`），后由 #3 把 `Connecting` 转移到 `Connected` / `Disconnected`；其余状态间转移仍空缺，归 #6（`Connecting` vs `Reconnecting` 分工）等后续 task。
 
-### 3. `Connecting` 没有 `SetNext` — 下一步会立刻撞到的问题
+### 3. ✅ 已修复 — `Connecting` 没有转移到任何下一状态
+
+**原问题**：
 
 ```csharp
 TcpClient client = await ctx.Connect(ct);
@@ -113,9 +115,33 @@ if (client != null) {
 
 循环结束后无论成功失败 `NextState == null`，`StartAsync` 直接退出。
 
-**修复**：
-- 成功时 `SetNext<Handshaking>()`（或直接 `Connected`，看你怎么定 SSL 阶段归属）
-- 重试耗尽时 `SetNext<Disconnected>()` 或 `SetNext<Closed>()`
+**修复方案**（在 #2 状态无副作用化的基础上）：
+
+```csharp
+// 成功路径（早 return，finally 仍解订阅事件）
+if (client != null) {
+    Debug.LogFormat("Connect to {0} success", ctx.TargetEndPoint);
+    return GetInstance<Connected>();
+}
+
+// OCE 路径（catch 里 return，finally 仍解订阅）
+} catch (OperationCanceledException) {
+    Debug.LogFormat("Connect to {0} canceled", ctx.TargetEndPoint);
+    return null;   // 干净终止 FSM
+}
+
+// 重试耗尽 / TLS 永久失败 → 走到底部
+return GetInstance<Disconnected>();
+```
+
+**修复思路（4 点）**：
+
+1. **成功用早 return，不再借标志位 + 底部 return**——靠 `try/finally` 自动确保事件解订阅，代码更紧凑、控制流一目了然。
+2. **TLS 失败和重试耗尽合并到同一出口**——两者都属于"非异常的失败收尾"，落到底部 `return GetInstance<Disconnected>()`。状态机不需要区分原因，UI 通过 `OnConnectFailed` 事件已经拿到 `ConnectErrorKind`。
+3. **OCE 在 catch 里 `return null`**——明确表示"FSM 干净终止"，不继续走任何后续状态；和 `StartAsync` 顶层的 OCE 处理形成两道防线。
+4. **不拆 `Handshaking` 状态**——保持 `Connecting` 内部由 `ctx.Connect()` 一次性完成 TCP+SSL；等真的需要细分 SSL 握手 / 业务握手时再做。决策依据：状态机只代表 TCP 网络层生命周期。
+
+**未做的**：把 `AuthenticateAsClientAsync` 拆到独立 `Handshaking` 状态——推迟到真有需求时再做。
 
 ### 4. 现在还是纯 "线性 next 指针" 模型，但 TCP 生命周期是事件驱动的
 
