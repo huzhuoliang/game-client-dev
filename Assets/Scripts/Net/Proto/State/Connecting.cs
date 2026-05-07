@@ -18,10 +18,8 @@ namespace Net.Proto.State {
                 for (int i = 0; i < ctx.MaxAttempts; i++) {
                     TcpClient client = await ctx.Connect(ct);
                     if (client != null) {
-                        // ReSharper disable once PossiblyMistakenUseOfCancellationToken
-                        // StartLoop(ct); // TODO
                         Debug.LogFormat("Connect to {0} success", ctx.TargetEndPoint);
-                        break;
+                        return GetInstance<Connected>();
                     }
 
                     if (lastErrorKind == ConnectErrorKind.TlsAuthFailed) {
@@ -37,12 +35,14 @@ namespace Net.Proto.State {
                     }
                 }
             } catch (OperationCanceledException) {
+                // 取消是正常退出路径，由状态机顶层处理；此处只记录信息
                 Debug.LogFormat("Connect to {0} canceled", ctx.TargetEndPoint);
+                return null;
             } finally {
                 ctx.OnConnectFailed -= OnFailed;
             }
-            // TODO 成功 → Handshaking、TLS 失败 → Closed 等转移在 #3 里写
-            return null;
+            // 重试耗尽 / TLS 失败 → 走到 Disconnected
+            return GetInstance<Disconnected>();
             void OnFailed(ConnectErrorKind kind, Exception _) => lastErrorKind = kind;
         }
     }

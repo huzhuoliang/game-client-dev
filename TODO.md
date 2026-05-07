@@ -211,7 +211,12 @@ event Action<ConnectErrorKind, Exception> OnConnectFailed;
 
 - [x] **2. 修 `TcpClientStateMachine` 的异常/取消语义**——OCE 干净 `return`；其他异常打日志 + `return`；`OnExit` 用 `try/finally` 保证执行。FaultedState 还没引入。
 
-- [ ] **3. 把 `Connecting` 写完整**：成功 → `Handshaking`（先把 SSL 拆出去），失败 → `Closed`。同时把 `Handshaking` 写出来（搬 `AuthenticateAsClientAsync` 那段）。
+- [x] **3. 把 `Connecting` 写完整**（部分完成）：
+    - ✅ 成功 → `GetInstance<Connected>()`（暂不拆 `Handshaking`，`Connecting` 内部仍由 `ctx.Connect()` 一次性完成 TCP + SSL）
+    - ✅ 重试耗尽 / TLS 永久失败 → `GetInstance<Disconnected>()`
+    - ✅ OCE → `return null`（FSM 干净退出）
+    - ⏸️ **未做的**：把 `AuthenticateAsClientAsync` 从 `ctx.Connect` 拆到独立 `Handshaking` 状态。这一步推迟到真的需要细分 SSL 握手 / 业务握手时再做。
+    - 决策依据：状态机只代表 **TCP 网络层** 生命周期；游戏层（登录/选角/对局）单开 FSM 通过事件观察 TCP 状态，不混在一起。
 
 - [ ] **4. 写 `Ready` 状态——真正的硬骨头**：
     - 把 `RingBufferStream`、`ListenLoopAsync`、`ParseLoopAsync` 从 `GameTcpClient` 搬过来
