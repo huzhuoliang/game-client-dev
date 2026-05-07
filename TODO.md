@@ -9,10 +9,10 @@
 | `TcpClientStateBase` / `TcpClientStateMachine` / `ITcpClientFSMCtx` / `TcpClientFSMCtx` / `TcpClientStateMachineMono` | 骨架已搭好 |
 | `Init` | 真实实现（注册 handler → `Connecting`） |
 | `Connecting` | 真实实现（成功 → `Connected`，失败/TLS/重试耗尽 → `Disconnected`，OCE → `null`） |
-| `Connected` | 真实实现（`WhenAny(listen, parse)` → 任一退出 → `Disconnecting`；OCE → bubble） |
+| `Connected` | 薄壳（~15 行）：调 `ctx.RunMessagePump(ct)`，OCE 透传，其他异常 → `Disconnecting` |
 | `Handshaking` / `Reconnecting` / `Disconnecting` / `Disconnected` / `Closed` | 全是 `await UniTask.Yield()` 占位 |
 | `Ready` | 已删除（合并到 `Connected`） |
-| `GameTcpClient` 老代码 | 仍在跑，没人删，listen/parse/SendMessage 也还都在这边 |
+| `GameTcpClient` 老代码 | 仍在跑（`GameClient.cs` 用），新 FSM 已具备同等 listen/parse/SendMessage 能力，等 #7 删除 |
 
 ---
 
@@ -269,15 +269,123 @@ RingBufferStream RingBuffer { get; } // 整个 ctx 生命周期复用一个
 - **`SendMessage` 的对外 API**：归 #5。`NetworkStream` 已经在 ctx 上能写，但还没有 framing/加锁/线程安全的发送入口。
 - **删除 `GameTcpClient` 老代码**：归 #7。当前 `GameTcpClient` 仍含 listen/parse 副本——让两套 FSM/老代码并存，便于回滚验证。
 
-### 5. `ITcpClientFSMCtx.Connect` 接口设计有点拧
+**后续瘦身（2026-05-08，#5 完成后顺手做）**：
 
-`TcpClientFSMCtx.Connect` 内部把 `_client` 和 `_stream` 写进了 ctx，但还把 `TcpClient` 当返回值，调用方只用它做 null 检查。
+把 listen/parse/magic-number 解析这一坨代码从 `Connected.cs` 搬回 `TcpClientFSMCtx`，Connected 缩成 ~15 行：
 
-**修复**：二选一：
-- 改成 `UniTask<bool> ConnectAsync(ct)`，client/stream 通过 ctx 取
-- ctx 不持有，由 state 持有（不推荐，state 想做无状态的）
+```csharp
+protected override async UniTask<TcpClientStateBase> RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct = default) {
+    try {
+        await ctx.RunMessagePump(ct);
+    } catch (OperationCanceledException) {
+        throw;
+    } catch (Exception e) {
+        Debug.LogFormat("Connection broken: {0}", e.Message);
+    }
+    return GetInstance<Disconnecting>();
+}
+```
 
-另外 `TcpClient` 不该泄漏给 state——state 要的是一个能读写的 `Stream`，把 `SslStream` 暴露出来就够了。
+理由：
+
+1. **对称性**：发送侧 `SendMessage` 已经在 ctx（framing + 写锁 + magic）；接收侧（listen + parse + magic 匹配 + dispatch）属于同类东西，应该住同一栋楼，`MAGIC_NUMBER` 只剩一份。
+2. **职责**：状态应该回答"我在哪个生命周期阶段、下一步走哪"，不是"魔数怎么匹配、CRC 怎么校验"——后者是 wire 协议层的事。
+3. **接口收紧**：`ITcpClientFSMCtx.NetworkStream` / `RingBuffer` 在 #5 完成后已无消费者，一并从接口删掉；`TcpClientFSMCtx` 内部仍保留 `_stream` / `_ringBuffer` 作为私有字段。
+
+接口最终长这样：
+
+```csharp
+public interface ITcpClientFSMCtx : IDisposable {
+    IPEndPoint TargetEndPoint { get; }
+    int MaxAttempts { get; }
+    int RetryDelayMs { get; }
+    event Action<ConnectErrorKind, Exception> OnConnectFailed;
+    UniTask<bool> Connect(CancellationToken ct = default);
+    UniTask SendMessage(MessageType messageType, IMessage message, CancellationToken ct = default);
+    UniTask RunMessagePump(CancellationToken ct);
+}
+```
+
+### 5. ✅ 已修复 — 公共 API 面：`Connect` 签名拧 + 没有 `SendMessage` 入口
+
+**原问题**：
+
+两件事捆在一起：
+
+1. `ITcpClientFSMCtx.Connect` 返回 `UniTask<TcpClient>`，但 `_client` / `_stream` 实际写在 ctx 内部；调用方只用返回值做 null 检查，`TcpClient` 没必要泄漏。
+2. 没有公共 `SendMessage` 入口。`Connected` 想发心跳没接口、外部 UI/`GameClient.cs` 也没法调；老代码靠 `GameTcpClient.SendMessage` 直写 `_stream`，没有写入串行化（SslStream 不允许并发写）。
+3. `TcpClientStateMachineMono` 完全私有，外部拿不到 ctx，订阅不到 `OnConnectFailed`，也没法发消息（参见 #10 已知遗留）。
+
+**修复方案**：
+
+① `Connect` 返回类型改 `UniTask<bool>`，client/stream 通过 ctx 属性取：
+
+```csharp
+UniTask<bool> Connect(CancellationToken ct = default);  // 接口
+```
+
+② 接口加 `SendMessage`，实现走 `SemaphoreSlim` 串行化 + 大端 framing + `WriteAsync`：
+
+```csharp
+// ITcpClientFSMCtx.cs
+UniTask SendMessage(MessageType messageType, IMessage message, CancellationToken ct = default);
+```
+
+```csharp
+// TcpClientFSMCtx.cs
+private readonly SemaphoreSlim _writeLock = new(1, 1);
+
+public async UniTask SendMessage(MessageType messageType, IMessage message, CancellationToken ct = default) {
+    Stream stream = _stream;
+    if (stream == null) {
+        throw new InvalidOperationException("SendMessage called while not connected (NetworkStream is null)");
+    }
+    byte[] payload = BuildFrame(messageType, message);
+
+    await _writeLock.WaitAsync(ct).AsUniTask();
+    try {
+        await stream.WriteAsync(payload, 0, payload.Length, ct).AsUniTask();
+    } finally {
+        _writeLock.Release();
+    }
+}
+
+private static byte[] BuildFrame(MessageType messageType, IMessage message) {
+    byte[] body = message.ToByteArray();
+    uint crc = Crc32.Compute(body, 0, body.Length);
+    using MemoryStream mem = new MemoryStream(4 + 2 + 4 + body.Length + 4);
+    mem.Write(sMagicNumberBytes, 0, 4);
+    mem.Write(((ushort)messageType).GetBytesBigEndian(), 0, 2);
+    mem.Write(((uint)body.Length).GetBytesBigEndian(), 0, 4);
+    mem.Write(body, 0, body.Length);
+    mem.Write(crc.GetBytesBigEndian(), 0, 4);
+    return mem.ToArray();
+}
+```
+
+③ `TcpClientStateMachineMono` 暴露 `public ITcpClientFSMCtx Context => _ctx`；调试 `[Button]` 改为一行 `_ctx.SendMessage(...).Forget()`，去掉之前 25 行的 framing helper。
+
+④ `Connecting.RunAsyncInternal` 适配新签名：`bool ok = await ctx.Connect(ct)` 取代 `TcpClient client = ...`。
+
+⑤ `TcpClientFSMCtx.Client` 公开属性删掉（之前 grep 也没人用）——彻底切断 `TcpClient` 对 state / 外部的泄漏。
+
+**修复思路（4 点）**：
+
+1. **`bool` 比 `TcpClient?` 表意更准**——调用方关心的是"连上了没"，不关心拿到啥具体类型。返回 `bool` 让 `if (ok)` 这种写法不再需要解释。
+2. **写锁放 ctx 不放 state**——SslStream 的并发约束是 IO 边界的事，不是状态机的事；多个状态都可能调 `SendMessage`，锁集中在一处比每个状态自己加保险。`SemaphoreSlim` 比 `lock` 好的点是支持 `await` + `CancellationToken`。
+3. **`SendMessage` 异步而不是同步**——同步 `Write` 在主线程上阻塞 SslStream 写出（虽然实际很快），换 `WriteAsync` 让发送不会卡帧、还能配合 ct 取消。返回 `UniTask` 让调用方自己选 await / Forget。
+4. **暴露 `ITcpClientFSMCtx` 而不是 `TcpClientFSMCtx`**——外部代码看到的是接口，私有实现细节（`_writeLock`、`_client` 字段、`Dispose`）藏起来。换实现（mock / fake）也容易。
+
+**未做的（不属于本步）**：
+
+- DNS 同步阻塞构造函数（旧 #6，TODO 编号上现在轮空了，下次重排）
+- 删 `GameTcpClient`（归 #7）
+- `Connecting` vs `Reconnecting` 分工（归 #6 当前的"重排后"）
+
+**已知遗留**：
+
+- `TcpClientFSMCtx.SendMessage` 抛 `InvalidOperationException` 是有意为之——调用方未连接就发消息属于编程错误，应该崩出来便于发现。后续如果要支持"离线消息排队"，再加 `TryQueueMessage` 之类的非异常 API。
+- ~~`MAGIC_NUMBER` 在两处~~——已通过 #4 的"后续瘦身"合并：parse/listen 搬回 ctx，`MAGIC_NUMBER` 只剩 ctx 一份。
 
 ### 6. `TcpClientFSMCtx` 构造函数里同步阻塞 DNS
 
@@ -341,7 +449,7 @@ event Action<ConnectErrorKind, Exception> OnConnectFailed;
 
 **已知遗留**：
 
-- `TcpClientStateMachineMono` 暂未把 ctx / 事件暴露给外部，UI 还订阅不到。等 #5（公共 API 面）一起处理；现在用 `Debug.Log` 先看到。
+- ✅ ~~`TcpClientStateMachineMono` 暂未把 ctx / 事件暴露给外部~~——已通过 #5 暴露 `public ITcpClientFSMCtx Context`，UI 现在能订阅 `OnConnectFailed`。
 - `TargetHost` 仍硬编码 `"localhost"`——证书装好后下一步可能撞 `CN_MISMATCH`。看证书 SAN 决定是否要把 host 名传进 ctx。
 
 ---
@@ -369,7 +477,13 @@ event Action<ConnectErrorKind, Exception> OnConnectFailed;
     - ⏸️ **未做**：外部"软中断"事件 `OnDisconnectRequested`——没有真正的调用方，等需求落地（UI 登出按钮）再加，从 `linkedCts` 升级 < 5 行
     - ⏸️ **未做**：socket 错时区分 `Reconnecting`/`Disconnecting`——归 #6，当前一律 `Disconnecting`
 
-- [ ] **5. 设计公共 API 面**：`SendMessage` 现在没地方放。建议给 ctx 加一个 `IMessageSender`（持有 stream + 写入锁），任何状态阶段都能调；外部代码（`GameClient.cs`）也通过 ctx 调用，而不是直接调 state。
+- [x] **5. 设计公共 API 面**（已落地）：
+    - ✅ `Connect` 返回 `UniTask<bool>`，不再泄漏 `TcpClient`
+    - ✅ ctx 加 `SendMessage(MessageType, IMessage, ct)`，内部 `SemaphoreSlim` 串行化 + 大端 framing + 异步 `WriteAsync`
+    - ✅ `TcpClientStateMachineMono` 暴露 `public ITcpClientFSMCtx Context => _ctx`，外部按接口拿能力
+    - ✅ `Connecting.cs` 适配新 `Connect` 签名（`bool ok = await ctx.Connect(ct)`）
+    - ✅ 顺手解决 #10 的"Mono 不暴露 ctx" 遗留
+    - ✅ **顺手瘦身 Connected**：把 listen/parse/magic 解析搬回 ctx，新增 `RunMessagePump`；接口删 `NetworkStream` / `RingBuffer`；Connected 从 ~105 行 → ~15 行（详见 #4 末尾"后续瘦身"小节）
 
 - [ ] **6. 想清楚 `Connecting` vs `Reconnecting` 的分工**：是否让 `Connecting` 只跑一次（首次连接），重试逻辑挪到 `Reconnecting`？现在重试循环写在 `Connecting` 里，但又有个独立 `Reconnecting` 状态，语义重复。
 

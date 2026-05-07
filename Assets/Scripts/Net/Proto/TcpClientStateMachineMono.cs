@@ -1,10 +1,7 @@
-using System.IO;
 using System.Threading;
 using Cysharp.Threading.Tasks;
-using Game.Util;
 using GameServerServices.HelloWorld;
 using GameServerServices.MessageType;
-using Google.Protobuf;
 using Net.Proto.State;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -14,6 +11,9 @@ namespace Net.Proto {
         private TcpClientFSMCtx _ctx;
         private TcpClientStateMachine _stateMachine;
         private CancellationTokenSource _cts;
+
+        // UI / 外部调用方通过这个接口拿 SendMessage / OnConnectFailed 等公共能力
+        public ITcpClientFSMCtx Context => _ctx;
 
         private void Awake() {
             _ctx = new TcpClientFSMCtx("192.168.50.16", 50052);
@@ -31,34 +31,13 @@ namespace Net.Proto {
             _cts = null;
         }
 
-        // 临时调试入口：等 #5 公共 SendMessage API 落地后替换掉
+        // 调试入口：发送 HelloWorld，期望 TcpHelloWorldHandler 收到 reply 并打日志
         [PropertySpace(SpaceBefore = 20f)]
         [Button("Send HelloWorld")]
         [DisableInEditorMode]
         private void DebugSendHelloWorld() {
             HelloRequest request = new HelloRequest { Name = "Unity Player (FSM)" };
-            DebugSend(MessageType.MsgHelloworldRequest, request);
-        }
-
-        private void DebugSend(MessageType messageType, IMessage message) {
-            Stream stream = _ctx?.NetworkStream;
-            if (stream == null) {
-                Debug.LogWarning("Stream not ready — connect first");
-                return;
-            }
-
-            const uint MAGIC = 0xCAFEBABE;
-            byte[] body = message.ToByteArray();
-            uint crc = Crc32.Compute(body, 0, body.Length);
-
-            using MemoryStream mem = new MemoryStream();
-            mem.Write(MAGIC.GetBytesBigEndian(), 0, 4);
-            mem.Write(((ushort)messageType).GetBytesBigEndian(), 0, 2);
-            mem.Write(((uint)body.Length).GetBytesBigEndian(), 0, 4);
-            mem.Write(body, 0, body.Length);
-            mem.Write(crc.GetBytesBigEndian(), 0, 4);
-            byte[] payload = mem.ToArray();
-            stream.Write(payload, 0, payload.Length);
+            _ctx.SendMessage(MessageType.MsgHelloworldRequest, request).Forget();
         }
     }
 }

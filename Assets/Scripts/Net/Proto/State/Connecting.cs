@@ -1,5 +1,4 @@
 using System;
-using System.Net.Sockets;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
@@ -16,8 +15,8 @@ namespace Net.Proto.State {
             ctx.OnConnectFailed += OnFailed;
             try {
                 for (int i = 0; i < ctx.MaxAttempts; i++) {
-                    TcpClient client = await ctx.Connect(ct);
-                    if (client != null) {
+                    bool ok = await ctx.Connect(ct);
+                    if (ok) {
                         Debug.LogFormat("Connect to {0} success", ctx.TargetEndPoint);
                         return GetInstance<Connected>();
                     }

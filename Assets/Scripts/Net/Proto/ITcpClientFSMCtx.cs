@@ -1,9 +1,9 @@
 using System;
-using System.IO;
 using System.Net;
-using System.Net.Sockets;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using GameServerServices.MessageType;
+using Google.Protobuf;
 
 namespace Net.Proto {
     public interface ITcpClientFSMCtx : IDisposable {
@@ -23,16 +23,6 @@ namespace Net.Proto {
         int RetryDelayMs { get; }
 
         /// <summary>
-        /// 已建立的 SSL 流；<see cref="Connect"/> 成功后才有值。<see cref="Connected"/> 状态读、外部 SendMessage 写。
-        /// </summary>
-        Stream NetworkStream { get; }
-
-        /// <summary>
-        /// listen / parse 循环之间共享的环形缓冲。整个 ctx 生命周期复用同一个，断线重连不重新分配。
-        /// </summary>
-        RingBufferStream RingBuffer { get; }
-
-        /// <summary>
         /// 单次连接尝试失败时触发（每次失败/重试都会触发一次）。
         /// 取消（OperationCanceledException）不会触发，会以异常形式向上抛。
         /// 供 UI 订阅以做用户提示。
@@ -40,9 +30,23 @@ namespace Net.Proto {
         event Action<ConnectErrorKind, Exception> OnConnectFailed;
 
         /// <summary>
-        /// 建立 TCP 连接 + 完成 TLS 握手。失败返回 null（同时已触发 <see cref="OnConnectFailed"/>）；
+        /// 建立 TCP 连接 + 完成 TLS 握手。成功返回 true；失败返回 false（同时已触发 <see cref="OnConnectFailed"/>）；
         /// 取消抛 OperationCanceledException。
         /// </summary>
-        UniTask<TcpClient> Connect(CancellationToken ct = default);
+        UniTask<bool> Connect(CancellationToken ct = default);
+
+        /// <summary>
+        /// 发送一条消息：自动套上 wire format header（Magic + Type + Length + Body + CRC32，全大端）。
+        /// 写入串行化（内部 SemaphoreSlim），并发调用安全。
+        /// 调用时必须已连接，否则抛 InvalidOperationException。
+        /// </summary>
+        UniTask SendMessage(MessageType messageType, IMessage message, CancellationToken ct = default);
+
+        /// <summary>
+        /// 启动并阻塞 listen + parse 双循环（消息泵）：socket → ring buffer → 解帧 → handler 分发。
+        /// 任一循环退出 / `ct` 取消时一起 drain 后返回。
+        /// 由 `Connected` 状态调用——OCE 会被透传，IOException / 协议错原样抛。
+        /// </summary>
+        UniTask RunMessagePump(CancellationToken ct);
     }
 }
