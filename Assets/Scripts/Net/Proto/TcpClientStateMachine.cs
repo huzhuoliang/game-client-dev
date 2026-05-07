@@ -17,14 +17,24 @@ namespace Net.Proto {
         public async UniTask StartAsync(TcpClientStateBase initState, CancellationToken token = default) {
             _state = initState;
             while (_state != null) {
+                TcpClientStateBase next;
                 try {
                     _state.OnEnter(_context);
-                    await _state.RunAsync(_context, token);
-                    _state.OnExit(_context);
-                    _state = _state.NextState;
+                    try {
+                        await _state.RunAsync(_context, token);
+                    } finally {
+                        // OnExit 必须在退出（含异常）时执行，承担状态自身的清理职责
+                        _state.OnExit(_context);
+                    }
+                    next = _state.NextState;
+                } catch (OperationCanceledException) {
+                    // 取消是正常退出路径
+                    return;
                 } catch (Exception e) {
-                    Debug.LogErrorFormat("TcpClientState Run Error.\n{0}", e);
+                    Debug.LogErrorFormat("TcpClientState \"{0}\" run error.\n{1}", _state.GetType().Name, e);
+                    return;
                 }
+                _state = next;
             }
         }
     }

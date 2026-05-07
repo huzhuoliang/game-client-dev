@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using System;
+using Sirenix.Utilities;
 using UnityEngine;
 
 namespace Net.Proto.State {
@@ -24,7 +25,7 @@ namespace Net.Proto.State {
         }
 
         public UniTask RunAsync(ITcpClientFSMCtx ctx, CancellationToken ct = default) {
-            Debug.LogErrorFormat("============ RunAsync \"{0}\"", GetType());
+            Debug.LogErrorFormat("============ RunAsync \"{0}\"", GetType().GetNiceName());
             return RunAsyncInternal(ctx, ct);
         }
 

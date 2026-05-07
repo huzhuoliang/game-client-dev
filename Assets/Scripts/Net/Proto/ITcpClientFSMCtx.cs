@@ -22,10 +22,16 @@ namespace Net.Proto {
         int RetryDelayMs { get; }
 
         /// <summary>
-        /// 建立 TCP 连接（返回已连接的 TcpClient，或 null 表示失败）
+        /// 单次连接尝试失败时触发（每次失败/重试都会触发一次）。
+        /// 取消（OperationCanceledException）不会触发，会以异常形式向上抛。
+        /// 供 UI 订阅以做用户提示。
         /// </summary>
-        /// <param name="ct"></param>
-        /// <returns></returns>
+        event Action<ConnectErrorKind, Exception> OnConnectFailed;
+
+        /// <summary>
+        /// 建立 TCP 连接 + 完成 TLS 握手。失败返回 null（同时已触发 <see cref="OnConnectFailed"/>）；
+        /// 取消抛 OperationCanceledException。
+        /// </summary>
         UniTask<TcpClient> Connect(CancellationToken ct = default);
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using Cysharp.Threading.Tasks;
@@ -19,6 +20,8 @@ namespace Net.Proto {
         public int TimeoutMs { get; private set; }
 
         public int RetryDelayMs { get; private set; }
+
+        public event Action<ConnectErrorKind, Exception> OnConnectFailed;
 
         private TcpClient _client;
         public TcpClient Client => _client;
@@ -57,23 +60,56 @@ namespace Net.Proto {
         }
 
         public async UniTask<TcpClient> Connect(CancellationToken ct) {
-            CancellationTokenSource cts = new(TimeoutMs);
-            CancellationTokenSource tsConn = CancellationTokenSource.CreateLinkedTokenSource(ct, cts.Token);
-            TcpClient client = await ConnectOnce(tsConn.Token);
-            return client;
+            using CancellationTokenSource timeoutCts = new(TimeoutMs);
+            using CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+            return await ConnectOnce(linkedCts.Token);
         }
 
         private async UniTask<TcpClient> ConnectOnce(CancellationToken ct) {
             DisposeTcpClient(ref _client);
-            _client = await CreateTcpClientAndConnect(TargetEndPoint, ct);
+
+            // Phase 1: TCP 连接
+            try {
+                _client = await CreateTcpClientAndConnect(TargetEndPoint, ct);
+            } catch (OperationCanceledException) {
+                // 取消透传
+                throw;
+            } catch (SocketException e) {
+                Debug.LogFormat("Connect failed (socket): {0}", e.Message);
+                OnConnectFailed?.Invoke(ConnectErrorKind.SocketError, e);
+                return null;
+            } catch (Exception e) {
+                Debug.LogErrorFormat("Connect failed (unknown): {0}", e);
+                OnConnectFailed?.Invoke(ConnectErrorKind.Unknown, e);
+                return null;
+            }
+
             if (_client == null) {
                 return null;
             }
-            SslStream sslStream = new SslStream(_client.GetStream(), false, ValidateSeverCertificate);
-            SslClientAuthenticationOptions options = new() { TargetHost = "localhost" };
-            await sslStream.AuthenticateAsClientAsync(options, ct).AsUniTask();
-            _stream = sslStream;
-            return Client;
+
+            // Phase 2: TLS 握手
+            try {
+                SslStream sslStream = new SslStream(_client.GetStream(), false, ValidateSeverCertificate);
+                SslClientAuthenticationOptions options = new() { TargetHost = "localhost" };
+                await sslStream.AuthenticateAsClientAsync(options, ct).AsUniTask();
+                _stream = sslStream;
+                return _client;
+            } catch (OperationCanceledException) {
+                DisposeTcpClient(ref _client);
+                throw;
+            } catch (AuthenticationException e) {
+                // 证书不被信任 / CN 不匹配 / 协议不兼容等。重试通常无效。
+                Debug.LogErrorFormat("TLS handshake failed: {0}", e.Message);
+                OnConnectFailed?.Invoke(ConnectErrorKind.TlsAuthFailed, e);
+                DisposeTcpClient(ref _client);
+                return null;
+            } catch (Exception e) {
+                Debug.LogErrorFormat("SSL init failed: {0}", e);
+                OnConnectFailed?.Invoke(ConnectErrorKind.Unknown, e);
+                DisposeTcpClient(ref _client);
+                return null;
+            }
         }
 
         private static bool ValidateSeverCertificate(
@@ -93,22 +129,13 @@ namespace Net.Proto {
                 int index = await UniTask.WhenAny(connectTask, cancelTask);
                 if (index == 1) {
                     DisposeTcpClient(ref tcpClient);
-                    return null;
+                    ct.ThrowIfCancellationRequested();
                 }
-
                 return tcpClient;
-            } catch (Exception) when (ct.IsCancellationRequested) {
-                /* Task canceled */
+            } catch {
+                // 异常情况下确保清理，让上层按类型分发
                 DisposeTcpClient(ref tcpClient);
-                return null;
-            } catch (SocketException e) {
-                Debug.LogFormat("Connect failed.\n{0}", e);
-                DisposeTcpClient(ref tcpClient);
-                return null;
-            } catch (Exception e) {
-                Debug.LogErrorFormat("Connect failed.\n{0}", e);
-                DisposeTcpClient(ref tcpClient);
-                return null;
+                throw;
             }
         }
 

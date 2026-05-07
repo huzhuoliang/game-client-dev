@@ -10,6 +10,8 @@ namespace Net.Proto.State {
         public override void OnEnter(ITcpClientFSMCtx ctx) { }
 
         protected override async UniTask RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct = default) {
+            ConnectErrorKind lastErrorKind = ConnectErrorKind.Unknown;
+            ctx.OnConnectFailed += OnFailed;
             try {
                 for (int i = 0; i < ctx.MaxAttempts; i++) {
                     TcpClient client = await ctx.Connect(ct);
@@ -19,6 +21,13 @@ namespace Net.Proto.State {
                         Debug.LogFormat("Connect to {0} success", ctx.TargetEndPoint);
                         break;
                     }
+
+                    if (lastErrorKind == ConnectErrorKind.TlsAuthFailed) {
+                        // 证书/握手类错误重试无意义，提前退出，等 UI/上层处理
+                        Debug.LogErrorFormat("Connect to {0} aborted: TLS auth failed.", ctx.TargetEndPoint);
+                        break;
+                    }
+
                     Debug.LogFormat("{0}/{1} Connect to {2} failed", i + 1, ctx.MaxAttempts, ctx.TargetEndPoint);
                     if (ctx.RetryDelayMs > 0) {
                         // ReSharper disable once PossiblyMistakenUseOfCancellationToken
@@ -27,7 +36,11 @@ namespace Net.Proto.State {
                 }
             } catch (OperationCanceledException) {
                 Debug.LogFormat("Connect to {0} canceled", ctx.TargetEndPoint);
+            } finally {
+                ctx.OnConnectFailed -= OnFailed;
             }
+            return;
+            void OnFailed(ConnectErrorKind kind, Exception _) => lastErrorKind = kind;
         }
     }
 }
