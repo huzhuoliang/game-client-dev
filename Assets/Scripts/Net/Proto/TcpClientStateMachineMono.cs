@@ -15,7 +15,7 @@ namespace Net.Proto {
 
         private void OnEnable() {
             _cts = new CancellationTokenSource();
-            _stateMachine.StartAsync(new Init(), _cts.Token).Forget();
+            _stateMachine.StartAsync<Init>(_cts.Token).Forget();
         }
 
         private void OnDisable() {

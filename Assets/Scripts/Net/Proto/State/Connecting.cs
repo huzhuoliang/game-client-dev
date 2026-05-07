@@ -7,9 +7,11 @@ using UnityEngine;
 namespace Net.Proto.State {
     // ReSharper disable once ClassNeverInstantiated.Global
     public sealed class Connecting : TcpClientStateBase {
+        private Connecting() { }
+
         public override void OnEnter(ITcpClientFSMCtx ctx) { }
 
-        protected override async UniTask RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct = default) {
+        protected override async UniTask<TcpClientStateBase> RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct = default) {
             ConnectErrorKind lastErrorKind = ConnectErrorKind.Unknown;
             ctx.OnConnectFailed += OnFailed;
             try {
@@ -39,7 +41,8 @@ namespace Net.Proto.State {
             } finally {
                 ctx.OnConnectFailed -= OnFailed;
             }
-            return;
+            // TODO 成功 → Handshaking、TLS 失败 → Closed 等转移在 #3 里写
+            return null;
             void OnFailed(ConnectErrorKind kind, Exception _) => lastErrorKind = kind;
         }
     }

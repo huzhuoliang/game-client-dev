@@ -67,16 +67,39 @@ while (_state != null) {
 
 **注意**：这是过渡修复。后续做 #2（API 重塑成"`RunAsync` 直接返回下一个状态"）时，`NextState` 字段和这段 `next` 推进代码会一起被改写。但本步骤独立可上、可测，先解掉死循环的阻塞性问题。
 
-### 2. `TcpClientStateBase` 的静态 `instanceDic` 是个隐患
+### 2. ✅ 已修复 — `TcpClientStateBase` 的静态 `instanceDic` 与 `NextState` 字段冲突
+
+**原问题**：
 
 状态实例放在 **静态字典** 里，多个 `TcpClientStateMachine` 实例会共享同一组状态对象，而 `NextState` 是实例字段——两个 client 一起跑会互相把对方的 `NextState` 覆盖掉。同时这些状态对象永远不会被释放。
 
-**两条出路（推荐第一种）**：
+**修复方案**：状态无状态化（之前列的两条出路里的第一条）。
 
-- **状态无状态化**：把 `NextState` 字段去掉，让 `RunAsyncInternal` **返回** 下一个状态类型（或 enum）。状态对象真的可以做 singleton。
-- 把 `instanceDic` 从 static 改成 FSM 实例字段。
+- 删掉 `NextState` 字段和 `SetNext<T>()` 帮助方法
+- `RunAsyncInternal` 的签名从 `UniTask` 改成 **`UniTask<TcpClientStateBase>`**，返回值即下一个要执行的状态实例（用 `GetInstance<T>()` 取），返回 **`null`** 表示终止 FSM
+- `GetInstance<T>()` 从 `private` 提到 `public static`，方便外部（启动器）取初始状态
+- `TcpClientStateMachine.StartAsync` 消费新的返回值（`next = await _state.RunAsync(...)`），并新增泛型重载 `StartAsync<TInit>(token)` 当语法糖
+- `TcpClientStateMachineMono` 用 `_stateMachine.StartAsync<Init>(_cts.Token)` 取代之前的 `new Init()`（解决 #9：不再绕过 instance 缓存）
+- 各具体状态：
+  - `Init` 改成 `return UniTask.FromResult<TcpClientStateBase>(GetInstance<Connecting>())`
+  - `Connecting` 末尾 `return null`（成功 / 失败 / TLS 错误目前都终止 FSM；具体转移在 #3 里再写）
+  - 7 个 stub 状态（`Handshaking` / `Connected` / `Ready` / `Reconnecting` / `Disconnecting` / `Disconnected` / `Closed`）：`await UniTask.Yield(); return null;`
 
-第一种和 `Game.StateMachine` 那套（`State.GetNext()`）行为一致，但更纯粹。
+**修复思路（4 点）**：
+
+1. **状态变成"纯函数风格"**——`RunAsyncInternal(ctx, ct)` 只读取 `ctx` 和 `ct`，结果通过返回值给出，没有任何副作用写到状态对象自身上。共享 singleton 不再有竞争。
+2. **下一状态在调用栈里流转**——`StartAsync` 用一个局部 `next` 变量保存返回值，紧接着赋给 `_state`。这把"下一状态"的生命周期严格限制在状态机自己的循环里，状态对象彻底不掺合。
+3. **`null` = 终止 FSM**——比 enum / 哨兵对象都简单，类型系统直接表达"没有下一个状态"的语义；调用方只需 `while (_state != null)`。
+4. **静态缓存继续保留**——状态对象现在真的可以共享，缓存只是为了省 `Activator.CreateInstance` 的反射开销。也连带解决了 #9（`new Init()` 绕过缓存）：入口现在统一走 `GetInstance<Init>()`。
+
+**顺手解决了**：
+
+- ✅ #9（`new Init()` 绕过 instanceDic）—— 入口换成 `GetInstance<Init>()`，整套调用全走单例。
+
+**未变的事**：
+
+- `TcpClientStateMachine.StartAsync` 异常/取消处理（#1 已修过）保持不动。
+- 各状态之间的具体转移语义（成功该去哪、失败该去哪）保持现状不变；这是 #3 / #6 的工作。
 
 ### 3. `Connecting` 没有 `SetNext` — 下一步会立刻撞到的问题
 
@@ -131,9 +154,9 @@ ip = Dns.GetHostAddressesAsync(host).AsUniTask().GetAwaiter().GetResult()[0];
 
 `Debug.LogErrorFormat("============ RunAsync ...")` 这条日志按语义应该挪到 `OnEnter`——"进入状态" 比 "开始 run" 更准。RunAsync 那条可以删掉。
 
-### 9. `new Init()` 绕过了 instanceDic 缓存
+### 9. ✅ 已修复（随 #2 一起） — `new Init()` 绕过了 instanceDic 缓存
 
-`TcpClientStateMachineMono.OnEnable` 里 `new Init()` 创建了一个不在缓存里的实例，但后续 `SetNext<X>` 又会把别的状态丢进缓存。如果按 #2 走 "状态无状态化"，这个问题自然消失；不然得统一入口。
+`TcpClientStateMachineMono.OnEnable` 现在用 `_stateMachine.StartAsync<Init>(_cts.Token)`，内部调用 `TcpClientStateBase.GetInstance<Init>()` 取单例，整套调用都走缓存。
 
 ### 10. ✅ 已修复 — 证书/握手异常未被捕获，会让 FSM 直接挂掉
 
@@ -184,15 +207,9 @@ event Action<ConnectErrorKind, Exception> OnConnectFailed;
 
 按这个顺序做：
 
-- [ ] **1. 重塑 `TcpClientStateBase` API（解决 #1 + #2 + #5）**——这三个会决定基类 API 形状，越往后改越伤。建议改成：
+- [x] **1. 重塑 `TcpClientStateBase` API（已落地 #1 + #2 + #9）**——`RunAsyncInternal` 改成 `UniTask<TcpClientStateBase>` 返回下一状态，删掉 `NextState` 字段和 `SetNext`。`GetInstance<T>` 提为 public，状态彻底无副作用。**注**：#5（`ITcpClientFSMCtx.Connect` 的返回签名 + ctx 不该泄漏 TcpClient 给 state）独立于基类 API，仍未解决。
 
-    ```csharp
-    protected abstract UniTask<TcpClientStateBase> RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct);
-    ```
-
-    返回 `null` = 终止 FSM，返回自己 = 自循环（不太需要）。彻底干掉 `NextState` 字段、`SetNext`、静态字典。
-
-- [ ] **2. 修 `TcpClientStateMachine` 的异常/取消语义**——OCE 干净退出，其他异常按策略要么转到一个 `FaultedState` 要么直接 break。
+- [x] **2. 修 `TcpClientStateMachine` 的异常/取消语义**——OCE 干净 `return`；其他异常打日志 + `return`；`OnExit` 用 `try/finally` 保证执行。FaultedState 还没引入。
 
 - [ ] **3. 把 `Connecting` 写完整**：成功 → `Handshaking`（先把 SSL 拆出去），失败 → `Closed`。同时把 `Handshaking` 写出来（搬 `AuthenticateAsClientAsync` 那段）。
 

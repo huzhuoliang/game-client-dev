@@ -4,12 +4,14 @@ using System.Threading;
 using Cysharp.Threading.Tasks;
 
 namespace Net.Proto.State {
+    // ReSharper disable once ClassNeverInstantiated.Global
     public sealed class Init : TcpClientStateBase {
-        protected override UniTask RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct = default) {
+        private Init() { }
+
+        protected override UniTask<TcpClientStateBase> RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct = default) {
             RegisterAll();
-            SetNext<Connecting>();
             ct.ThrowIfCancellationRequested();
-            return UniTask.CompletedTask;
+            return UniTask.FromResult<TcpClientStateBase>(GetInstance<Connecting>());
         }
 
         private static void RegisterAll() {

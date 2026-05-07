@@ -14,6 +14,10 @@ namespace Net.Proto {
             _context = context;
         }
 
+        public UniTask StartAsync<TInit>(CancellationToken token = default) where TInit : TcpClientStateBase {
+            return StartAsync(TcpClientStateBase.GetInstance<TInit>(), token);
+        }
+
         public async UniTask StartAsync(TcpClientStateBase initState, CancellationToken token = default) {
             _state = initState;
             while (_state != null) {
@@ -21,12 +25,11 @@ namespace Net.Proto {
                 try {
                     _state.OnEnter(_context);
                     try {
-                        await _state.RunAsync(_context, token);
+                        next = await _state.RunAsync(_context, token);
                     } finally {
                         // OnExit 必须在退出（含异常）时执行，承担状态自身的清理职责
                         _state.OnExit(_context);
                     }
-                    next = _state.NextState;
                 } catch (OperationCanceledException) {
                     // 取消是正常退出路径
                     return;
