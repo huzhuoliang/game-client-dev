@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using System;
-using Sirenix.Utilities;
 using UnityEngine;
 
 namespace Net.Proto.State {
@@ -29,7 +28,6 @@ namespace Net.Proto.State {
         }
 
         public UniTask<TcpClientStateBase> RunAsync(ITcpClientFSMCtx ctx, CancellationToken ct = default) {
-            Debug.LogErrorFormat("============ RunAsync \"{0}\"", GetType().GetNiceName());
             return RunAsyncInternal(ctx, ct);
         }
 
@@ -39,8 +37,22 @@ namespace Net.Proto.State {
         /// </summary>
         protected abstract UniTask<TcpClientStateBase> RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct = default);
 
-        public virtual void OnEnter(ITcpClientFSMCtx ctx) { }
+        /// <summary>
+        /// 进入状态时由状态机调用。base 实现负责打印进入日志
+        /// </summary>
+        public void OnEnterWrap(ITcpClientFSMCtx ctx) {
+            Debug.LogFormat("[TcpClientStateBase] Enter state \"{0}\"", GetType().Name);
+            OnEnter(ctx);
+        }
 
-        public virtual void OnExit(ITcpClientFSMCtx ctx) { }
+        public void OnExitWrap(ITcpClientFSMCtx ctx) {
+            Debug.LogFormat("[TcpClientStateBase] Exit state \"{0}\"", GetType().Name);
+            OnExit(ctx);
+        }
+
+        protected virtual void OnEnter(ITcpClientFSMCtx ctx) { }
+
+
+        protected virtual void OnExit(ITcpClientFSMCtx ctx) { }
     }
 }

@@ -36,6 +36,9 @@ namespace Net.Proto {
         private readonly string _host;
         private readonly int _port;
 
+        // TLS SNI / 证书 CN 校验用的 host name；与 _host 解耦——可指向 IP 但要求证书 SAN 是某域名
+        private readonly string _targetHost;
+
         // DNS 解析后缓存；构造时若给的是 IPEndPoint 则直接填充，否则首次 Connect 时填充
         private IPEndPoint _targetEndPoint;
         public string RemoteAddress => _targetEndPoint?.ToString() ?? $"{_host}:{_port}";
@@ -51,11 +54,13 @@ namespace Net.Proto {
                 IPEndPoint targetEndPoint,
                 int maxAttempts = 10,
                 int timeoutMs = 5000,
-                int retryDelayMs = 1000
+                int retryDelayMs = 1000,
+                string targetHost = "localhost"
         ) {
             _targetEndPoint = targetEndPoint;
             _host = targetEndPoint.Address.ToString();
             _port = targetEndPoint.Port;
+            _targetHost = targetHost;
             MaxAttempts = maxAttempts;
             TimeoutMs = timeoutMs;
             RetryDelayMs = retryDelayMs;
@@ -66,10 +71,12 @@ namespace Net.Proto {
                 int port,
                 int maxAttempts = 10,
                 int timeoutMs = 5000,
-                int retryDelayMs = 1000
+                int retryDelayMs = 1000,
+                string targetHost = "localhost"
         ) {
             _host = host;
             _port = port;
+            _targetHost = targetHost;
             // _targetEndPoint 留 null，Connect() 第一步异步解析 DNS 时填充
             MaxAttempts = maxAttempts;
             TimeoutMs = timeoutMs;
@@ -145,7 +152,7 @@ namespace Net.Proto {
             // Phase 2: TLS 握手
             try {
                 SslStream sslStream = new SslStream(_client.GetStream(), false, ValidateSeverCertificate);
-                SslClientAuthenticationOptions options = new() { TargetHost = "localhost" };
+                SslClientAuthenticationOptions options = new() { TargetHost = _targetHost };
                 await sslStream.AuthenticateAsClientAsync(options, ct).AsUniTask();
                 _stream = sslStream;
                 return true;

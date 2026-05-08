@@ -8,8 +8,6 @@ namespace Net.Proto.State {
     public sealed class Connecting : TcpClientStateBase {
         private Connecting() { }
 
-        public override void OnEnter(ITcpClientFSMCtx ctx) { }
-
         protected override async UniTask<TcpClientStateBase> RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct = default) {
             ConnectErrorKind lastErrorKind = ConnectErrorKind.Unknown;
             ctx.OnConnectFailed += OnFailed;

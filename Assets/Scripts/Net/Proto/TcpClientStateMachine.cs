@@ -23,12 +23,12 @@ namespace Net.Proto {
             while (_state != null) {
                 TcpClientStateBase next;
                 try {
-                    _state.OnEnter(_context);
+                    _state.OnEnterWrap(_context);
                     try {
                         next = await _state.RunAsync(_context, token);
                     } finally {
                         // OnExit 必须在退出（含异常）时执行，承担状态自身的清理职责
-                        _state.OnExit(_context);
+                        _state.OnExitWrap(_context);
                     }
                 } catch (OperationCanceledException) {
                     // 取消是正常退出路径

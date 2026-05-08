@@ -66,27 +66,31 @@ ip = Dns.GetHostAddressesAsync(host).AsUniTask().GetAwaiter().GetResult()[0];
 3. **`AttachExternalCancellation` 而不是 ct 重载**——Unity 的 .NET 没有 `Dns.GetHostAddressesAsync(host, ct)` 重载；UniTask 提供的 `AttachExternalCancellation` 让我们能在 ct 触发时立刻 throw OCE，底下 DNS 查询任由它在后台跑完（孤儿 task，无资源泄漏）。
 4. **接口收紧**——之前 `TargetEndPoint` 有外部消费者全是日志用途；换成显式只为日志的 `RemoteAddress`，类型从 `IPEndPoint?` 变 `string`，调用方不必处理 null。
 
-#### T3. `OnEnter` / `OnExit` 利用 + 日志位置（历史 #8）
+#### T3. ✅ `OnEnter` / `OnExit` 利用 + 日志位置（历史 #8，2026-05-08 落地）
 
-`TcpClientStateBase.RunAsync` 里的 `Debug.LogErrorFormat("============ RunAsync ...")` 按语义应在 `OnEnter`——"进入状态" 比 "开始 run" 更准。
+**原问题**：`TcpClientStateBase.RunAsync` 里 `Debug.LogErrorFormat("============ RunAsync ...")` 语义不准——按"进入状态"语义应在 `OnEnter`。
 
-**改动**：日志挪到 `OnEnter`；`RunAsync` 那条删掉；保持 `OnEnter` / `OnExit` 的"配对调用"语义。
+**修复**：
 
-工作量：~5 行内。
+- 日志挪到 base `OnEnter`：`Debug.LogErrorFormat("============ Enter state \"{0}\"", GetType().Name);`
+- `RunAsync` 那条 `Debug.LogErrorFormat` 删掉，wrapper 保留为纯 pass-through（公共方法封装 `RunAsyncInternal` 的访问性差）
+- `Connecting.cs` 里空的 `OnEnter` override 删掉（之前是 placeholder，现在会遮蔽 base 日志）
+- `using Sirenix.Utilities;` 删掉，`GetType().Name` 取代 `GetType().GetNiceName()`——和引擎里的日志格式（`_state.GetType().Name`）保持一致
+- 注释里写明：子类如有自定义 `OnEnter` 必须 `base.OnEnter(ctx)`，否则会丢日志
 
-#### T4. `TargetHost` 硬编码 `"localhost"`（历史 #10 遗留）
+**思路**：日志仍然是 `LogError` 而不是 `LogFormat`——CLAUDE.md 注明这是"intentional debug noise"，故意走红色让状态切换在 console 里醒目。
 
-`TcpClientFSMCtx.ConnectOnce` 里：
+#### T4. ✅ `TargetHost` 参数化（历史 #10 遗留，2026-05-08 落地）
 
-```csharp
-SslClientAuthenticationOptions options = new() { TargetHost = "localhost" };
-```
+**原问题**：`TcpClientFSMCtx.ConnectOnce` 里 `TargetHost = "localhost"` 硬编码——证书装好后撞 `CN_MISMATCH` 时只能改源码。
 
-证书装好后下一步可能撞 `CN_MISMATCH`。看证书 SAN 决定是否要把 host 名传进 ctx。
+**修复**：
 
-**改动**：`TargetHost` 从 ctx 配置传入；构造函数加可选参数 `string targetHost`，默认 `"localhost"` 保持向后兼容。
+- `TcpClientFSMCtx` 加 `_targetHost` 字段
+- 两个构造函数都加可选参数 `string targetHost = "localhost"`，默认值保持向后兼容
+- `ConnectOnce` 里 `SslClientAuthenticationOptions { TargetHost = _targetHost }`
 
-工作量：~10 行内。
+**为啥和 `_host` 解耦**：`_host` 是连接层（DNS / TCP）的 host；`_targetHost` 是 TLS 层（SNI + 证书 CN/SAN 校验）的 host。两者**通常一致**但**可以分离**——比如连接 IP 但证书 SAN 是某域名时，`_host = "192.168.x.x"` 而 `_targetHost = "game.example.com"`。混用会让"通过 IP 直连"无法和证书 SAN 校验对齐。
 
 ---
 
