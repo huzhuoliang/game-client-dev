@@ -10,8 +10,8 @@
 | `Init` | 真实实现（注册 handler → `Connecting`） |
 | `Connecting` | 真实实现（成功 → `Connected`，失败/TLS/重试耗尽 → `Disconnected`，OCE → `null`） |
 | `Connected` | 薄壳（~15 行）：调 `ctx.RunMessagePump(ct)`，OCE 透传，其他异常 → `Disconnecting` |
-| `Handshaking` / `Reconnecting` / `Disconnecting` / `Disconnected` / `Closed` | 全是 `await UniTask.Yield()` 占位 |
-| `Ready` | 已删除（合并到 `Connected`） |
+| `Handshaking` / `Disconnecting` / `Disconnected` / `Closed` | 全是 `await UniTask.Yield()` 占位 |
+| `Reconnecting` / `Ready` | 已删除（YAGNI——`Reconnecting` 与 `Connecting` 职责重复，`Ready` 与 `Connected` 职责重复） |
 | `GameTcpClient` 老代码 | 仍在跑（`GameClient.cs` 用），新 FSM 已具备同等 listen/parse/SendMessage 能力，等 #7 删除 |
 
 ---
@@ -85,7 +85,7 @@ while (_state != null) {
 - 各具体状态：
   - `Init` 改成 `return UniTask.FromResult<TcpClientStateBase>(GetInstance<Connecting>())`
   - `Connecting` 末尾 `return null`（成功 / 失败 / TLS 错误目前都终止 FSM；具体转移在 #3 里再写）
-  - 7 个 stub 状态（`Handshaking` / `Connected` / `Ready` / `Reconnecting` / `Disconnecting` / `Disconnected` / `Closed`）：`await UniTask.Yield(); return null;`
+  - 7 个 stub 状态（`Handshaking` / `Connected` / `Ready` / `Reconnecting` / `Disconnecting` / `Disconnected` / `Closed`）：`await UniTask.Yield(); return null;`（注：`Ready` 后续在 #4 删除，`Reconnecting` 后续在 #6 删除）
 
 **修复思路（4 点）**：
 
@@ -101,7 +101,7 @@ while (_state != null) {
 **未变的事**：
 
 - `TcpClientStateMachine.StartAsync` 异常/取消处理（#1 已修过）保持不动。
-- 当时 #2 完成时各状态之间的具体转移语义还是占位（`return null`），后由 #3 把 `Connecting` 转移到 `Connected` / `Disconnected`；其余状态间转移仍空缺，归 #6（`Connecting` vs `Reconnecting` 分工）等后续 task。
+- 当时 #2 完成时各状态之间的具体转移语义还是占位（`return null`），后由 #3 把 `Connecting` 转移到 `Connected` / `Disconnected`；其余状态间转移仍空缺。
 
 ### 3. ✅ 已修复 — `Connecting` 没有转移到任何下一状态
 
@@ -162,7 +162,7 @@ return GetInstance<Disconnected>();
    - 哪条循环先抛异常 / 退出（socket EOF / `IOException` / 协议错误）
    - `ct` 被取消（应用退出 / `Mono.OnDisable` 调 `_cts.Cancel()`）
    - **未来**：外部主动请求转移（UI 点"登出" / 鉴权 token 过期 / 服务端推 kick 后业务层决定登出）
-3. **根据"是谁先唤醒了我"决定下一状态**：socket 错 → `Reconnecting`（如果允许自动重连，否则 `Disconnecting`）；主动 close → `Disconnecting`；`ct` 触发 → `return null`（FSM 干净退出，由 `StartAsync` 顶层 OCE catch 处理）。
+3. **根据"是谁先唤醒了我"决定下一状态**：socket 错 → `Disconnecting`（自动重连之前讨论过用单独的 `Reconnecting` 状态，#6 已决定砍掉，重连需求落地时让 `Disconnected` → `Connecting` 即可）；主动 close → `Disconnecting`；`ct` 触发 → `return null`（FSM 干净退出，由 `StartAsync` 顶层 OCE catch 处理）。
 
 旧 `GameTcpClient` 的解法：`StartLoop()` 把 listen/parse 当 fire-and-forget 起来；listen 循环 catch 到 `IOException("Disconnected")` 就**直接在异常处理里调 `CloseInternalAsync()` 自己改状态**。这是典型的"在工作循环的异常处理里搞副作用式状态转移"——正是 FSM 重构想消除的乱麻。
 
@@ -187,7 +187,7 @@ FSM 模型要求 `RunAsyncInternal` 完整执行完才 return 下一个状态—
               listen, parse,
               UniTask.WaitUntilCanceled(disconnectCts.Token)
           );
-          // idx 0/1 = 循环出事 → Reconnecting/Disconnecting；idx 2 = 主动登出 → Disconnecting
+          // idx 0/1 = 循环出事 → Disconnecting；idx 2 = 主动登出 → Disconnecting
       } finally {
           ctx.OnDisconnectRequested -= disconnectCts.Cancel;
       }
@@ -213,9 +213,9 @@ FSM 模型要求 `RunAsyncInternal` 完整执行完才 return 下一个状态—
 
 **实现 `Connected` 时要顺手定的子问题**（依赖 #5 的部分先列在这里，以免漏）：
 
-- `RingBufferStream` 放哪？建议放 **ctx**——理由：Reconnecting 之后回到 `Connected` 时可复用同一个 ring（避免重新分配 + 短暂内存峰值）；同时统一 ctx 作为"所有 IO 资源宿主"。
+- `RingBufferStream` 放哪？建议放 **ctx**——理由：将来加自动重连（`Disconnected → Connecting → Connected`）时可复用同一个 ring（避免重新分配 + 短暂内存峰值）；同时统一 ctx 作为"所有 IO 资源宿主"。
 - `_stream`（`SslStream`）目前在 `TcpClientFSMCtx` 里是 `private`，`Connected` 要读它——ctx 要么暴露 `Stream NetworkStream { get; }`，要么把 listen/parse pump 搬进 ctx，`Connected` 调 `await ctx.PumpAsync(ct)`。**前者更直接**，且和 #5 一起做（ctx 同时给外部 `SendMessage` 一个写入入口，写也走 ctx）。
-- `Disconnecting` vs `Reconnecting` 怎么分——这是 #6。实现 #4 时先一律 `return Disconnecting`，自动重连留 #6 决定。
+- `Disconnecting` vs `Reconnecting` 怎么分——这归 #6 决定。（**#6 后续决议**：删 `Reconnecting`，统一走 `Disconnecting`，自动重连需要时让 `Disconnected → Connecting`。）
 
 **老代码里这次要彻底丢掉的**：
 
@@ -260,12 +260,12 @@ RingBufferStream RingBuffer { get; } // 整个 ctx 生命周期复用一个
 1. **`linkedCts` 串两条循环 + 主 `ct`**——任一条循环死掉，进入 `finally` 后 `linkedCts.Cancel()` 把另一条也叫停，避免一个崩了另一个还在 `await` 的资源泄漏。`ct` 取消时也同步把循环带下。
 2. **`Preserve()` 才能 await 两次**——`UniTask` 默认只能 await 一次（struct 语义）；要在 `WhenAny` 之后再 await 拿异常 + 在 `finally` 里 drain，必须先 `Preserve()`。漏写会 InvalidOperationException。
 3. **OCE 透传，其他异常吞**——`ct.Cancel()` 进 catch OCE → `throw` → `StartAsync` 顶层 OCE 分支干净退出 FSM；`IOException` / 协议错误 / `ObjectDisposedException` 等被吞掉记日志，让出口走到 `Disconnecting` 状态做清理。这与 `Connecting` 的 OCE 处理对齐。
-4. **资源宿主统一在 ctx**——`RingBuffer` 由 ctx 持有的好处：以后 #6 实现 `Reconnecting → Connected` 回路时，可复用同一个 ring（避免 8KB 内存峰值）；`NetworkStream` 暴露成 `Stream` 而不是 `SslStream`，让 state 不依赖 TLS 细节，未来换 PlainStream 也不用改 state。
+4. **资源宿主统一在 ctx**——`RingBuffer` 由 ctx 持有的好处：以后真要加自动重连（`Disconnected → Connecting`）时，可复用同一个 ring（避免 8KB 内存峰值）；`NetworkStream` 暴露成 `Stream` 而不是 `SslStream`，让 state 不依赖 TLS 细节，未来换 PlainStream 也不用改 state。
 
 **未做的（留给后续）**：
 
 - **`OnDisconnectRequested` 软中断事件**：设计里讨论过，但当前还没有真正的外部触发方（UI 登出按钮）。等需求落地再加，避免给 FSM 引擎加无人调用的 hook。从 `linkedCts` 升级到"再额外串一个 disconnect token"代码改动 < 5 行。
-- **socket 出错时区分 `Reconnecting` vs `Disconnecting`**：归 #6。当前一律 `Disconnecting`。
+- ~~socket 出错时区分 `Reconnecting` vs `Disconnecting`~~：#6 已决定删 `Reconnecting`，统一走 `Disconnecting`。自动重连需求落地时改成 `Disconnected → Connecting` 即可。
 - **`SendMessage` 的对外 API**：归 #5。`NetworkStream` 已经在 ctx 上能写，但还没有 framing/加锁/线程安全的发送入口。
 - **删除 `GameTcpClient` 老代码**：归 #7。当前 `GameTcpClient` 仍含 listen/parse 副本——让两套 FSM/老代码并存，便于回滚验证。
 
@@ -380,7 +380,7 @@ private static byte[] BuildFrame(MessageType messageType, IMessage message) {
 
 - DNS 同步阻塞构造函数（旧 #6，TODO 编号上现在轮空了，下次重排）
 - 删 `GameTcpClient`（归 #7）
-- `Connecting` vs `Reconnecting` 分工（归 #6 当前的"重排后"）
+- ~~`Connecting` vs `Reconnecting` 分工~~（归 #6，已决定砍 `Reconnecting`）
 
 **已知遗留**：
 
@@ -475,7 +475,7 @@ event Action<ConnectErrorKind, Exception> OnConnectFailed;
     - ✅ `Connected.RunAsyncInternal` 用 `linkedCts` + `UniTask.WhenAny(listen, parse)` + `Preserve()` + `finally` 中 drain
     - ✅ OCE 透传 → `StartAsync` 顶层 catch；其他异常 → `Disconnecting`
     - ⏸️ **未做**：外部"软中断"事件 `OnDisconnectRequested`——没有真正的调用方，等需求落地（UI 登出按钮）再加，从 `linkedCts` 升级 < 5 行
-    - ⏸️ **未做**：socket 错时区分 `Reconnecting`/`Disconnecting`——归 #6，当前一律 `Disconnecting`
+    - ✅ ~~socket 错时区分 `Reconnecting`/`Disconnecting`~~——#6 已决定砍掉 `Reconnecting`，一律 `Disconnecting`
 
 - [x] **5. 设计公共 API 面**（已落地）：
     - ✅ `Connect` 返回 `UniTask<bool>`，不再泄漏 `TcpClient`
@@ -485,7 +485,13 @@ event Action<ConnectErrorKind, Exception> OnConnectFailed;
     - ✅ 顺手解决 #10 的"Mono 不暴露 ctx" 遗留
     - ✅ **顺手瘦身 Connected**：把 listen/parse/magic 解析搬回 ctx，新增 `RunMessagePump`；接口删 `NetworkStream` / `RingBuffer`；Connected 从 ~105 行 → ~15 行（详见 #4 末尾"后续瘦身"小节）
 
-- [ ] **6. 想清楚 `Connecting` vs `Reconnecting` 的分工**：是否让 `Connecting` 只跑一次（首次连接），重试逻辑挪到 `Reconnecting`？现在重试循环写在 `Connecting` 里，但又有个独立 `Reconnecting` 状态，语义重复。
+- [x] **6. 想清楚 `Connecting` vs `Reconnecting` 的分工**（已落地）：
+    - ✅ 决议：**砍掉 `Reconnecting` 状态**。`Connecting` 已自带重试循环，`Reconnecting` 与之职责重复；当前没有自动重连功能，留个空状态属于 YAGNI。
+    - ✅ 删 `Assets/Scripts/Net/Proto/State/Reconnecting.cs` + `.meta`
+    - ✅ `CLAUDE.md` 状态列表更新（`Reconnecting` 不再"reserved"）
+    - 决策依据：FSM 应按"行为不同"分状态，不按"何时被调用"。首次连接和重连本质都是"调 `ctx.Connect()` 直到成功或放弃"；UI 想区分"重连中"vs"连接中"应自己用会话历史推断，不该让 FSM 多养一个状态。
+    - 未来真要加自动重连：让 `Disconnected.RunAsyncInternal` 根据 `ctx.AutoReconnect` 标志直接 `return GetInstance<Connecting>()` 即可，不需要专门的 `Reconnecting`。
+    - **注**：旧 `ETcpConnectionState` 枚举里的 `Reconnecting` 值仍在（被 `GameTcpClient` 引用），归 #7（删 `GameTcpClient`）一起清理。
 
 - [ ] **7. 删除 `GameTcpClient` 旧实现**，把 `GameClient.cs` 改成用 `TcpClientFSMCtx` + `TcpClientStateMachineMono`。这一步要等 #4、#5 全跑通再做。
 
@@ -495,4 +501,4 @@ event Action<ConnectErrorKind, Exception> OnConnectFailed;
 
 - #1、#2、#5 是 API 形状决定，必须先做。
 - #4 是工作量最大的一块，但要等 API 稳定才能下手。
-- #6 是设计决策，可以在写 `Reconnecting` 之前再敲定。
+- #6 是设计决策（已敲定：删 `Reconnecting`）。
