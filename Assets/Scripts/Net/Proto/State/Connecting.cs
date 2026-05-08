@@ -17,17 +17,17 @@ namespace Net.Proto.State {
                 for (int i = 0; i < ctx.MaxAttempts; i++) {
                     bool ok = await ctx.Connect(ct);
                     if (ok) {
-                        Debug.LogFormat("Connect to {0} success", ctx.TargetEndPoint);
+                        Debug.LogFormat("Connect to {0} success", ctx.RemoteAddress);
                         return GetInstance<Connected>();
                     }
 
                     if (lastErrorKind == ConnectErrorKind.TlsAuthFailed) {
                         // 证书/握手类错误重试无意义，提前退出，等 UI/上层处理
-                        Debug.LogErrorFormat("Connect to {0} aborted: TLS auth failed.", ctx.TargetEndPoint);
+                        Debug.LogErrorFormat("Connect to {0} aborted: TLS auth failed.", ctx.RemoteAddress);
                         break;
                     }
 
-                    Debug.LogFormat("{0}/{1} Connect to {2} failed", i + 1, ctx.MaxAttempts, ctx.TargetEndPoint);
+                    Debug.LogFormat("{0}/{1} Connect to {2} failed", i + 1, ctx.MaxAttempts, ctx.RemoteAddress);
                     if (ctx.RetryDelayMs > 0) {
                         // ReSharper disable once PossiblyMistakenUseOfCancellationToken
                         await UniTask.Delay(millisecondsDelay: ctx.RetryDelayMs, cancellationToken: ct);
@@ -35,7 +35,7 @@ namespace Net.Proto.State {
                 }
             } catch (OperationCanceledException) {
                 // 取消是正常退出路径，由状态机顶层处理；此处只记录信息
-                Debug.LogFormat("Connect to {0} canceled", ctx.TargetEndPoint);
+                Debug.LogFormat("Connect to {0} canceled", ctx.RemoteAddress);
                 return null;
             } finally {
                 ctx.OnConnectFailed -= OnFailed;

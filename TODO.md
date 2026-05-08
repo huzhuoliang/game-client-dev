@@ -33,16 +33,16 @@
 - 删 `Assets/Scripts/Net/Proto/ETCPConnectionState.cs`（含旧的 `Reconnecting` 枚举值）
 - 同时清理：
   - `GameTcpClient.RegisterAllByReflection`（与 `Init.cs` 里的重复，删 `GameTcpClient` 那份）—— 历史 #7
-  - `ServerStatusMono.cs` 里 `gameClient.IsClientConnected` / `Addr` / `Port` 的引用——改成订阅 ctx 状态变化或读 `Context.TargetEndPoint`
+  - `ServerStatusMono.cs` 里 `gameClient.IsClientConnected` / `Addr` / `Port` 的引用——改成订阅 ctx 状态变化或读 `Context.RemoteAddress`
 - 验证：进 `GameClient.unity` 场景，确认连接、发送、断开都和迁移前一致
 
 **依赖**：T2-T4 不阻塞（可以并行 / 插队 / 先做）。
 
 ### 🟡 独立小清理（可插队）
 
-#### T2. DNS 异步化（历史 #6）
+#### T2. ✅ DNS 异步化（历史 #6，2026-05-08 落地）
 
-`TcpClientFSMCtx(host, port)` 构造时同步阻塞主线程做 DNS：
+**原问题**：`TcpClientFSMCtx(host, port)` 构造时同步阻塞主线程做 DNS：
 
 ```csharp
 ip = Dns.GetHostAddressesAsync(host).AsUniTask().GetAwaiter().GetResult()[0];
@@ -50,9 +50,21 @@ ip = Dns.GetHostAddressesAsync(host).AsUniTask().GetAwaiter().GetResult()[0];
 
 主机不存在直接抛在 `new TcpClientFSMCtx(...)` 里，调用方很难处理。
 
-**改动**：构造函数只存 `_host` / `_port`；DNS 解析挪进 `Connect()`，第一步异步 + ct 可取消，失败走现有 `OnConnectFailed` 事件。`TargetEndPoint` 改为 pre-connect 是 null（或加一个 `Address` 属性给日志用）。
+**修复方案**：
 
-工作量：~30 行内，独立。
+- 构造函数只存 `_host` / `_port`（字面 IP 也走同一路径，不在构造里 parse）
+- 给 ctx 加私有方法 `ResolveEndPoint(ct)`：先 `IPAddress.TryParse` 试字面量，失败再走 `Dns.GetHostAddressesAsync` + `AttachExternalCancellation(ct)`
+- `Connect(ct)` 第一步：若 `_targetEndPoint == null` 就调 `ResolveEndPoint(ct)`；解析失败返 false（同时触发 `OnConnectFailed` 事件，DNS 失败归到 `SocketError` kind）；解析成功缓存到 `_targetEndPoint`，后续 `ConnectOnce` 用
+- 接口删 `IPEndPoint TargetEndPoint`，加 `string RemoteAddress`——所有外部消费者只用它做日志/UI 显示，没人需要 `IPEndPoint` 对象
+- `RemoteAddress` 实现：`_targetEndPoint?.ToString() ?? $"{_host}:{_port}"`，无论是否解析过都可用
+- `Connecting.cs` 4 处 `ctx.TargetEndPoint` → `ctx.RemoteAddress`
+
+**修复思路（4 点）**：
+
+1. **DNS 失败归到 `SocketError` 而非新 kind**——`Dns.GetHostAddressesAsync` 抛 `SocketException`，自然归到 `ConnectErrorKind.SocketError`。新加 `DnsResolutionFailed` 是 over-engineering，UI 想区分原因可以看 `Exception` 详情。
+2. **缓存解析结果**——`_targetEndPoint` 第一次解析后缓存，后续 `Connect()`（如重试）不再重复解析。将来加自动重连若想强制刷新 DNS，提供独立 API（YAGNI，先不做）。
+3. **`AttachExternalCancellation` 而不是 ct 重载**——Unity 的 .NET 没有 `Dns.GetHostAddressesAsync(host, ct)` 重载；UniTask 提供的 `AttachExternalCancellation` 让我们能在 ct 触发时立刻 throw OCE，底下 DNS 查询任由它在后台跑完（孤儿 task，无资源泄漏）。
+4. **接口收紧**——之前 `TargetEndPoint` 有外部消费者全是日志用途；换成显式只为日志的 `RemoteAddress`，类型从 `IPEndPoint?` 变 `string`，调用方不必处理 null。
 
 #### T3. `OnEnter` / `OnExit` 利用 + 日志位置（历史 #8）
 

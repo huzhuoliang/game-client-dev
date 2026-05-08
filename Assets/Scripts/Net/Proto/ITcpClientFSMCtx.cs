@@ -1,5 +1,4 @@
 using System;
-using System.Net;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using GameServerServices.MessageType;
@@ -8,9 +7,9 @@ using Google.Protobuf;
 namespace Net.Proto {
     public interface ITcpClientFSMCtx : IDisposable {
         /// <summary>
-        /// 目标端点（IP + 端口）
+        /// 目标地址的显示字符串（"host:port"）。无论 DNS 是否已解析都可用，仅用于日志/UI。
         /// </summary>
-        IPEndPoint TargetEndPoint { get; }
+        string RemoteAddress { get; }
 
         /// <summary>
         /// 最大重试次数

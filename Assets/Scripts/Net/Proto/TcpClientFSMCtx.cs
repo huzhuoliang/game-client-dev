@@ -25,8 +25,6 @@ namespace Net.Proto {
         private static readonly byte[] sMagicNumberBytes = MAGIC_NUMBER.GetBytesBigEndian();
         private static readonly ArrayPool<byte> sBufferPool = ArrayPool<byte>.Shared;
 
-        public IPEndPoint TargetEndPoint { get; private set; }
-
         public int MaxAttempts { get; private set; }
 
         public int TimeoutMs { get; private set; }
@@ -34,6 +32,13 @@ namespace Net.Proto {
         public int RetryDelayMs { get; private set; }
 
         public event Action<ConnectErrorKind, Exception> OnConnectFailed;
+
+        private readonly string _host;
+        private readonly int _port;
+
+        // DNS 解析后缓存；构造时若给的是 IPEndPoint 则直接填充，否则首次 Connect 时填充
+        private IPEndPoint _targetEndPoint;
+        public string RemoteAddress => _targetEndPoint?.ToString() ?? $"{_host}:{_port}";
 
         private TcpClient _client;
         private SslStream _stream;
@@ -48,7 +53,9 @@ namespace Net.Proto {
                 int timeoutMs = 5000,
                 int retryDelayMs = 1000
         ) {
-            TargetEndPoint = targetEndPoint;
+            _targetEndPoint = targetEndPoint;
+            _host = targetEndPoint.Address.ToString();
+            _port = targetEndPoint.Port;
             MaxAttempts = maxAttempts;
             TimeoutMs = timeoutMs;
             RetryDelayMs = retryDelayMs;
@@ -60,23 +67,56 @@ namespace Net.Proto {
                 int maxAttempts = 10,
                 int timeoutMs = 5000,
                 int retryDelayMs = 1000
-        ) : this(CreateEndPointFromHost(host, port), maxAttempts, timeoutMs, retryDelayMs) { }
-
-        private static IPEndPoint CreateEndPointFromHost(string host, int port) {
-            IPAddress ip;
-            if (IPAddress.TryParse(host, out IPAddress addr)) {
-                ip = addr;
-            } else {
-                ip = Dns.GetHostAddressesAsync(host).AsUniTask().GetAwaiter().GetResult()[0];
-            }
-            IPEndPoint targetEndPoint = new IPEndPoint(ip, port);
-            return targetEndPoint;
+        ) {
+            _host = host;
+            _port = port;
+            // _targetEndPoint 留 null，Connect() 第一步异步解析 DNS 时填充
+            MaxAttempts = maxAttempts;
+            TimeoutMs = timeoutMs;
+            RetryDelayMs = retryDelayMs;
         }
 
         public async UniTask<bool> Connect(CancellationToken ct) {
             using CancellationTokenSource timeoutCts = new(TimeoutMs);
             using CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+
+            if (_targetEndPoint == null) {
+                bool resolved = await ResolveEndPoint(linkedCts.Token);
+                if (!resolved) {
+                    return false;
+                }
+            }
+
             return await ConnectOnce(linkedCts.Token);
+        }
+
+        private async UniTask<bool> ResolveEndPoint(CancellationToken ct) {
+            // 字面量 IP 直接构造，跳过 DNS
+            if (IPAddress.TryParse(_host, out IPAddress literal)) {
+                _targetEndPoint = new IPEndPoint(literal, _port);
+                return true;
+            }
+
+            try {
+                IPAddress[] addresses = await Dns.GetHostAddressesAsync(_host)
+                        .AsUniTask()
+                        .AttachExternalCancellation(ct);
+                if (addresses == null || addresses.Length == 0) {
+                    throw new SocketException((int)SocketError.HostNotFound);
+                }
+                _targetEndPoint = new IPEndPoint(addresses[0], _port);
+                return true;
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (SocketException e) {
+                Debug.LogFormat("DNS resolve failed for {0}: {1}", _host, e.Message);
+                OnConnectFailed?.Invoke(ConnectErrorKind.SocketError, e);
+                return false;
+            } catch (Exception e) {
+                Debug.LogErrorFormat("DNS resolve failed (unknown): {0}", e);
+                OnConnectFailed?.Invoke(ConnectErrorKind.Unknown, e);
+                return false;
+            }
         }
 
         private async UniTask<bool> ConnectOnce(CancellationToken ct) {
@@ -84,7 +124,7 @@ namespace Net.Proto {
 
             // Phase 1: TCP 连接
             try {
-                _client = await CreateTcpClientAndConnect(TargetEndPoint, ct);
+                _client = await CreateTcpClientAndConnect(_targetEndPoint, ct);
             } catch (OperationCanceledException) {
                 // 取消透传
                 throw;
