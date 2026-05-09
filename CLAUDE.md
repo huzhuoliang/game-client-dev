@@ -57,7 +57,7 @@ This pulls from `server:/home/huzhuoliang/go-workspace/game-server/proto_csharp/
 
 `LoginStateMachine.Init()` uses reflection to instantiate every concrete `LoginStateBase` subclass once and stores them in a dictionary, so `SetNext<T>()` is essentially a typed lookup against pre-built instances. New login states are auto-discovered — just subclass `LoginStateBase` and they will be registered.
 
-**`Net.Proto.TcpClientStateMachine`** (`Assets/Scripts/Net/Proto/`): a separate FSM specifically for the TCP connection lifecycle. States live under `Net.Proto.State` (`Init → Connecting → Connected → Disconnecting → Disconnected → Closed`, with `Handshaking` reserved as a stub for future business-layer handshake). Each state is a singleton cached in a static dictionary (`TcpClientStateBase.GetInstance<T>()`), operates on an `ITcpClientFSMCtx`, and `RunAsyncInternal` returns the next state (`null` ends the FSM). The FSM runs end-to-end through `Connected` (which delegates listen/parse to `ctx.RunMessagePump`); `GameTcpClient` is still alive in parallel — `GameClient.cs` uses the old class, while `TcpClientStateMachineMono` runs the new FSM. Don't run both against the same server. Auto-reconnect doesn't exist yet — `Connected` death goes to `Disconnecting → Disconnected` and stops; if it's needed later, transition back into `Connecting` from `Disconnected` (no separate `Reconnecting` state). Outstanding refactor work (deleting old `GameTcpClient`, DNS in ctor) is tracked in `TODO.md`.
+**`Net.Tcp.TcpClientStateMachine`** (`Assets/Scripts/Net/Tcp/`): a separate FSM specifically for the TCP connection lifecycle. States live under `Net.Tcp.State` (`Init → Connecting → Connected → Disconnecting → Disconnected → Closed`, with `Handshaking` reserved as a stub for future business-layer handshake). Each state is a singleton cached in a static dictionary (`TcpClientStateBase.GetInstance<T>()`), operates on an `ITcpClientFSMCtx`, and `RunAsyncInternal` returns the next state (`null` ends the FSM). The FSM runs end-to-end through `Connected` (which delegates listen/parse to `ctx.RunMessagePump`); the legacy `GameTcpClient` (in `Net.Legacy`, `Assets/Scripts/Net/Legacy/`) is still alive in parallel — `GameClient.cs` uses the old class, while `TcpClientStateMachineMono` runs the new FSM. Don't run both against the same server. Auto-reconnect doesn't exist yet — `Connected` death goes to `Disconnecting → Disconnected` and stops; if it's needed later, transition back into `Connecting` from `Disconnected` (no separate `Reconnecting` state). Outstanding refactor work tracked in `TODO.md`.
 
 ### Networking (`Assets/Scripts/Net/`)
 
@@ -114,7 +114,8 @@ If you add cross-asmdef references, remember the Sirenix and Addressables module
 - `Game` — launcher, state machines, UI
 - `Game.Login` — login flow states
 - `Game.UI` — UI windows
-- `Net.Proto` — TCP client, message handlers, ring buffer, state machine
+- `Net.Tcp` / `Net.Tcp.State` — TCP client FSM module（new module, in `Assets/Scripts/Net/Tcp/`）
 - `Net.Mono` — MonoBehaviour network wrappers
-- `Net.Tcp` — concrete message handlers
+- `Net.Handlers` / `Net.Handlers.User` — concrete message handlers（in `Assets/Scripts/Net/Handlers/`）
+- `Net.Legacy` — old `GameTcpClient` / `ETcpConnectionState`（in `Assets/Scripts/Net/Legacy/`，待删）
 - `GameServerServices.*` — generated protobuf types

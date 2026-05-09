@@ -10,9 +10,10 @@ using Cysharp.Threading.Tasks;
 using Game.Util;
 using GameServerServices.MessageType;
 using Google.Protobuf;
+using Net.Tcp;
 using UnityEngine;
 
-namespace Net.Proto {
+namespace Net.Legacy {
     public class GameTcpClient : IDisposable {
         private const int MAGIC_NUMBER_SIZE = 4;
 

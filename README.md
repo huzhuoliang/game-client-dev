@@ -75,7 +75,7 @@ Singleton that maps `MessageType` → `IMessageHandlerWrapper`. In the Unity Edi
 ```csharp
 using GameServerServices.YourProto;
 using GameServerServices.MessageType;
-using Net.Proto;
+using Net.Tcp;
 
 public class YourMessageHandler : IMessageHandler<YourResponse> {
     public MessageType MessageType => MessageType.MsgYourResponse;

@@ -75,7 +75,7 @@ MonoBehaviour 封装，通过 Odin Inspector 在编辑器中暴露服务器地�
 ```csharp
 using GameServerServices.YourProto;
 using GameServerServices.MessageType;
-using Net.Proto;
+using Net.Tcp;
 
 public class YourMessageHandler : IMessageHandler<YourResponse> {
     public MessageType MessageType => MessageType.MsgYourResponse;

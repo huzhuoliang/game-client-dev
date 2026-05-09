@@ -1,7 +1,7 @@
 using Cysharp.Threading.Tasks;
 using GameServerServices.HelloWorld;
 using GameServerServices.MessageType;
-using Net.Proto;
+using Net.Legacy;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
