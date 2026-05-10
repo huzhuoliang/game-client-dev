@@ -33,6 +33,8 @@ namespace Net.Tcp {
 
         public event Action<ConnectErrorKind, Exception> OnConnectFailed;
 
+        public event Action OnDisconnectRequested;
+
         private readonly string _host;
         private readonly int _port;
 
@@ -324,8 +326,30 @@ namespace Net.Tcp {
             client = null;
         }
 
-        public void Dispose() {
+        public void RequestDisconnect() {
+            OnDisconnectRequested?.Invoke();
+        }
+
+        public UniTask CloseConnection() {
+            CloseConnectionInternal();
+            return UniTask.CompletedTask;
+        }
+
+        // 同步关闭 SslStream + TcpClient。best-effort、幂等、吞异常；
+        // 同时被 CloseConnection（公开异步版）和 Dispose 复用。
+        private void CloseConnectionInternal() {
+            try {
+                _stream?.Close();
+                _stream?.Dispose();
+            } catch (Exception e) {
+                Debug.LogFormat("Stream close error (ignored): {0}", e.Message);
+            }
+            _stream = null;
             DisposeTcpClient(ref _client);
+        }
+
+        public void Dispose() {
+            CloseConnectionInternal();
             _ringBuffer?.Dispose();
             _writeLock?.Dispose();
         }

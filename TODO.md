@@ -54,23 +54,97 @@
 
 ### 子任务（按依赖顺序）
 
-#### T1.1 — `Disconnecting` 状态真实现 + Mono dispose ctx
+#### T1.1 — ✅ `Disconnecting` 状态真实现 + 软中断信号机制 + Mono 资源释放（2026-05-10 落地）
 
-**文件**：`State/Disconnecting.cs` + `TcpClientStateMachineMono.cs` + `TcpClientFSMCtx.cs`
+**前置：盘点出的设计问题（2026-05-10 review）**
 
-**Disconnecting 真实实现**：
+写代码前发现这些问题必须先想清楚：
 
-- 关 `_stream`（SslStream）：`Close()` + `DisposeAsync()`
-- 关 `_client`（TcpClient）：`Close()` + `Dispose()`
-- 这俩资源目前在 ctx 里 `private`——倾向方案：ctx 加 `public void CloseConnection()`，把"关闭顺序 + 异常吞掉"封在一处；状态调用即可
-- 转移：→ `Disconnected`
+1. **🔴 主 ct 取消时不经过 Disconnecting**——`StartAsync` 顶层 catch OCE 后直接 `return`；`Connected` 收到 OCE 也透传。意味着 `Mono.OnDisable`（cancel cts）路径下 Disconnecting 永远跑不到，资源 leak。
+2. **🔴 `ctx.Dispose()` 漏关 `_stream`**——`SslStream(stream, false, ...)` 第二个参数 false 表示不拥有底层 stream，所以 `_client.Dispose()` 不会顺带关 SslStream。独立 bug。
+3. **🟡 Disconnecting 拿不到 `_client` / `_stream`**——它们在 ctx 里 `private`；state 看到的只是 `ITcpClientFSMCtx` 接口。需要 ctx 暴露 close 方法。
+4. **🟡 close 操作不该被 ct 中断**——清理动作必须 best-effort 跑完；`ctx.CloseConnection()` 不接受 ct，或用独立短 timeout。
+5. **🟡 `_cts.Cancel()` 紧跟 `_cts.Dispose()` 疑似重入**——FSM 还在跑（`Forget()` 起的），dispose 后 await ct 可能拿 `ObjectDisposedException`。改为先 cancel、等 FSM 跑完再 dispose（拆到 `OnDestroy`）。
+6. **🟢 `Connecting → Disconnected`（不经 Disconnecting）这条不是 bug**——Connecting 阶段从未真的连上，没有 socket / stream 要清理。文档里写明语义即可。
 
-**Mono 的 OnDisable**：
+**方案 B：软中断信号机制**（敲定）
 
-- 在 cancel cts 之后、置 null 之前，调 `_ctx?.Dispose()`
-- 防止场景切换 / 应用退出时 socket / stream / semaphore 泄漏
+ctx 暴露"主动断开请求"事件，与主 ct 的"FSM 紧急退出"语义严格分开：
 
-**工作量**：~30 行
+| 触发方式 | 走 Disconnecting？ |
+|---|---|
+| socket 自然断（IOException 等） | ✅ |
+| 主动调 `ctx.RequestDisconnect()`（软中断） | ✅ |
+| 主 ct 取消（紧急退出） | ❌（直接死，靠 `ctx.Dispose()` 兜底） |
+
+**子任务**
+
+##### T1.1a — ctx 加 close API + 软中断事件
+
+**文件**：`ITcpClientFSMCtx.cs` + `TcpClientFSMCtx.cs`
+
+- 接口加 `event Action OnDisconnectRequested;`
+- 接口加 `void RequestDisconnect();`（触发事件）
+- 接口加 `UniTask CloseConnection();`（best-effort，不接受 ct）
+- 实现：
+  - 私有 `CloseConnectionInternal()` 同步关 `_stream` / `_client`，吞异常
+  - `CloseConnection()` 调内部方法 + `return UniTask.CompletedTask`
+  - `Dispose()` 也调 `CloseConnectionInternal()`，再 dispose ringBuffer / writeLock（修了漏关 stream 的 bug）
+  - `RequestDisconnect()` 触发 `OnDisconnectRequested?.Invoke()`
+
+##### T1.1b — `Connected` 处理软中断
+
+**文件**：`State/Connected.cs`
+
+- 起独立 `disconnectCts`，订阅 `ctx.OnDisconnectRequested` 触发它
+- `linkedCts = ct + disconnectCts`，传给 `RunMessagePump`
+- catch OCE 时 `when (ct.IsCancellationRequested) throw;`——主 ct 取消还是紧急退出
+- 否则（软中断）→ 走到 `return GetInstance<Disconnecting>()`
+- `finally` 解订阅事件
+
+##### T1.1c — `Disconnecting` 实现
+
+**文件**：`State/Disconnecting.cs`
+
+```csharp
+protected override async UniTask<TcpClientStateBase> RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct = default) {
+    await ctx.CloseConnection();   // best-effort，不传 ct
+    return GetInstance<Disconnected>();
+}
+```
+
+##### T1.1d — Mono 调整生命周期
+
+**文件**：`TcpClientStateMachineMono.cs`
+
+- `OnDisable`：调 `_ctx?.RequestDisconnect()`，**不**取消 cts，让 FSM 跑完 Disconnecting
+- `OnDestroy`：兜底——cancel + dispose cts，dispose ctx
+- 顺手修：`_cts` 的 cancel/dispose 移到 OnDestroy，避免重入风险
+
+##### T1.1e — Connecting 也要订阅 OnDisconnectRequested（联调中发现，2026-05-10）
+
+**症状**：在 `Connecting` 重试期间 disable Mono 然后 re-enable，console 出现 `2/10 Connect to ... failed` 重复打印——OLD `Connecting` 的循环没被中止，与 NEW FSM 的 `Connecting` 同时跑。
+
+**根因**：T1.1b 只让 `Connected` 订阅了 `OnDisconnectRequested`。`Connecting` 也是长跑状态（重试循环最多 `MaxAttempts × (TimeoutMs + RetryDelayMs)` 秒）；没订阅信号意味着它跑完才走人。
+
+**结论**：**所有长跑状态都必须订阅 `OnDisconnectRequested`**——这是 T1.1 软中断设计的隐含契约。
+
+**修复**（`State/Connecting.cs`）：
+
+- 同样的 `disconnectCts` + `linkedCts(ct, disconnectCts.Token)` 模式
+- `await ctx.Connect(linkedCts.Token)`（之前是 `ct`）
+- `await UniTask.Delay(..., cancellationToken: linkedCts.Token)`（之前是 `ct`）
+- OCE catch 用 `when (disconnectCts.IsCancellationRequested && !ct.IsCancellationRequested)` 区分软中断；落入此分支 → return `Disconnected`
+- 主 ct / per-attempt 超时等其他 OCE → 保持原行为，`return null` FSM 退出
+- `finally` 解订阅事件
+
+**未解决的相关问题**（暂记不修）：
+
+`Mono.OnEnable` 当前直接 `_cts = new CancellationTokenSource()`——如果 OLD FSM 还在退出途中（理论上微秒级，但极端情况下可能重叠），OLD `_cts` 被覆盖、不 dispose、内存 leak；OLD FSM 也仍持有 OLD ct 继续跑。 
+
+实际场景下 OLD FSM 在收到软中断后**几个 async tick 内**完整退出，用户点 disable→re-enable 之间至少几帧间隔，足够 OLD 跑完。**当前不修**；如果将来发现 race，可在 OnEnable 加 `if (_cts != null) return;` 防御。
+
+**总工作量**：~60 行（初始）+ ~15 行（T1.1e 补丁）
 
 #### T1.2 — 砍 `Closed` 状态
 

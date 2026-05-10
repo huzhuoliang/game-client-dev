@@ -29,6 +29,24 @@ namespace Net.Tcp {
         event Action<ConnectErrorKind, Exception> OnConnectFailed;
 
         /// <summary>
+        /// "主动断开请求"软中断信号。`Connected` 状态订阅此事件，触发后会让状态机走 `Disconnecting` → `Disconnected`，
+        /// 与 ct 取消（=FSM 紧急退出）的语义严格分开。
+        /// </summary>
+        event Action OnDisconnectRequested;
+
+        /// <summary>
+        /// 触发 <see cref="OnDisconnectRequested"/> 事件。
+        /// 由外部调用方（如 UI 登出按钮、Mono.OnDisable）使用。
+        /// </summary>
+        void RequestDisconnect();
+
+        /// <summary>
+        /// 关闭活动连接（关 SslStream 与 TcpClient）。best-effort、不可中断、幂等；
+        /// 任何异常被吞进日志。`Disconnecting` 状态调用。
+        /// </summary>
+        UniTask CloseConnection();
+
+        /// <summary>
         /// 建立 TCP 连接 + 完成 TLS 握手。成功返回 true；失败返回 false（同时已触发 <see cref="OnConnectFailed"/>）；
         /// 取消抛 OperationCanceledException。
         /// </summary>
