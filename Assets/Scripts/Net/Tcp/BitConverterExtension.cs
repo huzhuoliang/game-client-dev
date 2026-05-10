@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace Net.Proto {
+namespace Net.Tcp {
     public static class BitConverterExtension {
         public static byte[] GetBytesBigEndian(this uint value) {
             byte[] bytes = BitConverter.GetBytes(value);

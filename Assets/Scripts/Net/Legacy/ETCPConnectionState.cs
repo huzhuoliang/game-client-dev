@@ -1,4 +1,4 @@
-namespace Net.Proto {
+namespace Net.Legacy {
     public enum ETcpConnectionState {
         /// <summary>
         /// 初始状态

@@ -1,9 +1,9 @@
 using GameServerServices.MessageType;
 using GameServerServices.User.Register;
-using Net.Proto;
+using Net.Tcp;
 using UnityEngine;
 
-namespace Net.Tcp.User {
+namespace Net.Handlers.User {
     // ReSharper disable once UnusedType.Global
     public class UserRegister : IMessageHandler<UserRegisterRes> {
         public MessageType MessageType => MessageType.MsgUserRegisterRes;

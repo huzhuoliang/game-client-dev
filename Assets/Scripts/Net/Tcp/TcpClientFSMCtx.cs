@@ -13,7 +13,7 @@ using GameServerServices.MessageType;
 using Google.Protobuf;
 using UnityEngine;
 
-namespace Net.Proto {
+namespace Net.Tcp {
     /// <summary>
     /// Tcp Client State Machine Context
     /// </summary>

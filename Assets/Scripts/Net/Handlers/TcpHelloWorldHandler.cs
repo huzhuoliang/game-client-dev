@@ -1,9 +1,9 @@
 using GameServerServices.HelloWorld;
 using GameServerServices.MessageType;
-using Net.Proto;
+using Net.Tcp;
 using UnityEngine;
 
-namespace Net.Tcp {
+namespace Net.Handlers {
     // ReSharper disable once UnusedType.Global
     public class TcpHelloWorldHandler : IMessageHandler<HelloReply> {
         public MessageType MessageType => MessageType.MsgHelloworldReply;

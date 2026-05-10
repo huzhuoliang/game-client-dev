@@ -1,7 +1,7 @@
 using GameServerServices.MessageType;
 using Google.Protobuf;
 
-namespace Net.Proto {
+namespace Net.Tcp {
     public interface IMessageHandlerWrapper {
         MessageType MessageType { get; }
         IMessage CreateMessage();

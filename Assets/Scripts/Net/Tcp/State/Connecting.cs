@@ -3,7 +3,7 @@ using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
-namespace Net.Proto.State {
+namespace Net.Tcp.State {
     // ReSharper disable once ClassNeverInstantiated.Global
     public sealed class Connecting : TcpClientStateBase {
         private Connecting() { }

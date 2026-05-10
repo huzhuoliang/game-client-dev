@@ -1,10 +1,10 @@
 using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
-using Net.Proto.State;
+using Net.Tcp.State;
 using UnityEngine;
 
-namespace Net.Proto {
+namespace Net.Tcp {
     public sealed class TcpClientStateMachine {
         private readonly ITcpClientFSMCtx _context;
 

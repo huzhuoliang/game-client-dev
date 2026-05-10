@@ -4,7 +4,7 @@ using System.Text;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 
-namespace Net.Proto.State {
+namespace Net.Tcp.State {
     // ReSharper disable once ClassNeverInstantiated.Global
     public sealed class Init : TcpClientStateBase {
         private Init() { }

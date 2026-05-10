@@ -4,7 +4,7 @@ using Cysharp.Threading.Tasks;
 using GameServerServices.MessageType;
 using Google.Protobuf;
 
-namespace Net.Proto {
+namespace Net.Tcp {
     public interface ITcpClientFSMCtx : IDisposable {
         /// <summary>
         /// 目标地址的显示字符串（"host:port"）。无论 DNS 是否已解析都可用，仅用于日志/UI。

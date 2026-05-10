@@ -2,11 +2,11 @@ using System.Threading;
 using Cysharp.Threading.Tasks;
 using GameServerServices.HelloWorld;
 using GameServerServices.MessageType;
-using Net.Proto.State;
+using Net.Tcp.State;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
-namespace Net.Proto {
+namespace Net.Tcp {
     public class TcpClientStateMachineMono : MonoBehaviour {
         private TcpClientFSMCtx _ctx;
         private TcpClientStateMachine _stateMachine;

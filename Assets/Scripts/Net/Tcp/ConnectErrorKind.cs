@@ -1,4 +1,4 @@
-namespace Net.Proto {
+namespace Net.Tcp {
     /// <summary>
     /// 连接失败的分类。便于 UI / 上层做差异化提示与重试决策。
     /// </summary>

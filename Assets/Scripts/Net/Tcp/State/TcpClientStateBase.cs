@@ -4,7 +4,7 @@ using Cysharp.Threading.Tasks;
 using System;
 using UnityEngine;
 
-namespace Net.Proto.State {
+namespace Net.Tcp.State {
     public abstract class TcpClientStateBase {
         /// <summary>
         /// 派生状态的 ctor 应当声明为 <c>private</c>，仅允许通过 <see cref="GetInstance{T}"/> 获取实例。

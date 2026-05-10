@@ -3,7 +3,7 @@ using GameServerServices.MessageType;
 using Google.Protobuf;
 using UnityEngine;
 
-namespace Net.Proto {
+namespace Net.Tcp {
     public class MessageHandlerRegistry {
         public static MessageHandlerRegistry Instance { get; } = new();
 
