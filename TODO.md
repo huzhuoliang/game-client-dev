@@ -14,7 +14,9 @@
 | `Init` | 真实实现（注册 handler → `Connecting`） |
 | `Connecting` | 真实实现（成功 → `Connected`，失败/TLS/重试耗尽 → `Disconnected`，OCE → `null`） |
 | `Connected` | 薄壳（~15 行）：调 `ctx.RunMessagePump(ct)`，OCE 透传，其他异常 → `Disconnecting` |
-| `Handshaking` / `Disconnecting` / `Disconnected` / `Closed` | 占位（`await UniTask.Yield()`） |
+| `Disconnecting` | 真实现：调 `ctx.CloseConnection()` 关 socket，转 `Disconnected` |
+| `Handshaking` / `Disconnected` | 占位（`await UniTask.Yield()`） |
+| `Closed` | 已删除（T1.2，没人转过去；`Disconnected` 返 null 已足够终止 FSM） |
 | `Reconnecting` / `Ready` | 已删除（YAGNI） |
 | `Net.Legacy.GameTcpClient` 老代码 | 已挪到 `Net/Legacy/` 文件夹 + `Net.Legacy` namespace；`Net.Mono.GameClient` 仍引用，与新模块并行，将来另行替换 |
 
@@ -39,7 +41,7 @@
 |---|---|
 | `Disconnecting` 状态没真实现 | `await UniTask.Yield(); return null;` 占位；socket / stream 实际清理仅靠 ctx.Dispose 兜底 |
 | `Mono.OnDisable` 没 dispose ctx | `TcpClient` / `SslStream` / `SemaphoreSlim` / `RingBufferStream` 全部 leak |
-| `Closed` 状态没人转过去 | 死代码 |
+| ~~`Closed` 状态没人转过去~~ | 已删（T1.2） |
 | 状态观察 API 缺位 | 外部代码无法问"当前哪状态"或订阅状态变化；只有 `OnConnectFailed` |
 | `Mono` 缺公开 `Connect()` / `Disconnect()` / `IsConnected` | 只能 `OnEnable` 自动起；调用方没法手动控制 |
 
@@ -146,7 +148,7 @@ protected override async UniTask<TcpClientStateBase> RunAsyncInternal(ITcpClient
 
 **总工作量**：~60 行（初始）+ ~15 行（T1.1e 补丁）
 
-#### T1.2 — 砍 `Closed` 状态
+#### T1.2 — ✅ 砍 `Closed` 状态（2026-05-10 落地）
 
 **文件**：`State/Closed.cs` + `.meta`
 
