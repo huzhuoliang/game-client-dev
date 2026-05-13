@@ -230,17 +230,82 @@ mono.StateMachine.OnStateChanged += (prev, next) => {
 
 **工作量**：~80 行（含 enum 文件 + base 改动 + 5 个子类一行 + 引擎改 + Handshaking 删除）
 
-#### T1.4 — `Mono` 加公开 `Connect()` / `Disconnect()` / `IsConnected` / `OnStateChanged`
+#### T1.4 — ✅ `Mono` 公开 `Connect()` / `Disconnect()` / `IsConnected` / `OnStateChanged`（2026-05-12 落地，enum 适配版）
 
 **文件**：`TcpClientStateMachineMono.cs`
 
-- `public bool IsConnected => _stateMachine?.CurrentState is Connected;`
-- `public event Action<TcpClientStateBase, TcpClientStateBase> OnStateChanged;`（中转引擎事件）
-- `public void Connect()`：幂等。`_cts` 为 null 就新建 cts + `StartAsync<Init>(_cts.Token).Forget()`；非 null 就 no-op
-- `public void Disconnect()`：取消并 dispose `_cts`，置 null（`OnDisable` 复用此方法）
-- `OnEnable` → `Connect()`；`OnDisable` → `Disconnect()` + `_ctx?.Dispose()`（T1.1 那条复用）
+新增的对外 API：
 
-**工作量**：~30 行
+```csharp
+public ITcpClientFSMCtx Context { get; }                                   // 早期已有，未动
+public ETcpState CurrentState => _stateMachine?.CurrentState ?? ETcpState.None;
+public bool IsConnected => CurrentState == ETcpState.Connected;
+public event Action<ETcpState, ETcpState> OnStateChanged;                  // 中转自引擎层
+public void Connect();
+public void Disconnect();
+```
+
+**`Connect()` 幂等**：
+
+```csharp
+public void Connect() {
+    if (_cts != null) return;   // FSM 在跑（含退出途中）→ no-op
+    _cts = new CancellationTokenSource();
+    _stateMachine.StartAsync<Init>(_cts.Token).Forget();
+}
+```
+
+**`Disconnect()` 软中断**：
+
+```csharp
+public void Disconnect() {
+    _ctx?.RequestDisconnect();   // 走 Connected/Connecting 的软中断路径 → Disconnecting → Disconnected → None
+}
+```
+
+**FSM 退出时自动清理 cts**（解决 T1.1 留下的"OnEnable 覆盖旧 cts 不 dispose"隐患）：
+
+```csharp
+private void OnEngineStateChanged(ETcpState prev, ETcpState next) {
+    if (next == ETcpState.None) {   // FSM 退出
+        _cts?.Dispose();
+        _cts = null;                 // 下次 Connect() 可起新 FSM
+    }
+    OnStateChanged?.Invoke(prev, next);   // 转发给外部订阅者
+}
+```
+
+**生命周期重构**：
+
+| Hook | T1.1 时 | T1.4 后 |
+|---|---|---|
+| `Awake` | new ctx + new sm | new ctx + new sm + 订阅引擎 `OnStateChanged` |
+| `OnEnable` | new cts + StartAsync | `Connect()` |
+| `OnDisable` | `_ctx?.RequestDisconnect()` | `Disconnect()` |
+| `OnDestroy` | cancel cts + dispose cts/ctx | 同 + 解订阅引擎事件、清外部 `OnStateChanged` |
+
+**外部使用示例**：
+
+```csharp
+[SerializeField] private TcpClientStateMachineMono client;
+
+void Start() {
+    client.OnStateChanged += OnStateChange;
+}
+void OnStateChange(ETcpState prev, ETcpState next) {
+    if (next == ETcpState.Connected) ShowOnlineIcon();
+    if (next == ETcpState.Disconnected && prev == ETcpState.Connected) ShowLostConnection();
+}
+
+void OnLogoutButton() => client.Disconnect();
+void OnRetryButton() => client.Connect();
+```
+
+**已知边界情况**：
+
+- 在 FSM 退出途中（如 `Disconnecting` 状态正在跑）调 `Connect()`：返回 no-op（`_cts` 还在）。等 FSM 退出完，下次 Connect 才生效。如果外部代码想立即重连，需要订阅 `OnStateChanged` 等 `(prev, None)` 来重新调 `Connect()`。这是当前刻意保持的简单语义。
+
+**工作量**：~50 行（含 6 个公共成员 + Engine 事件中转 + 生命周期重构 + XML 文档）
 
 #### T1.5 — 模块化卫生
 
