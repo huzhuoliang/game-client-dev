@@ -15,6 +15,12 @@ namespace Net.Tcp.State {
         private static readonly Dictionary<Type, TcpClientStateBase> instanceDic = new();
 
         /// <summary>
+        /// 状态对外的枚举身份。每个具体 state 子类必须返回对应的 <see cref="ETcpState"/> 值，
+        /// 引擎和外部观察者都通过它来判断"现在是什么状态"，不直接 typecheck state 类。
+        /// </summary>
+        public abstract ETcpState Kind { get; }
+
+        /// <summary>
         /// 获取（或惰性创建）状态单例。状态对象不持有任何与状态机实例相关的可变字段，
         /// 因此可以跨状态机共享。
         /// </summary>
@@ -27,7 +33,10 @@ namespace Net.Tcp.State {
             return (T)instance;
         }
 
-        public UniTask<TcpClientStateBase> RunAsync(ITcpClientFSMCtx ctx, CancellationToken ct = default) {
+        // 引擎-state 内部协议：下面三个方法仅 TcpClientStateMachine 调用。
+        // 标 internal 防止外部代码（UI / 应用层）拿到 state 实例后误触发，破坏 FSM 生命周期。
+
+        internal UniTask<TcpClientStateBase> RunAsync(ITcpClientFSMCtx ctx, CancellationToken ct = default) {
             return RunAsyncInternal(ctx, ct);
         }
 
@@ -40,12 +49,12 @@ namespace Net.Tcp.State {
         /// <summary>
         /// 进入状态时由状态机调用。base 实现负责打印进入日志
         /// </summary>
-        public void OnEnterWrap(ITcpClientFSMCtx ctx) {
+        internal void OnEnterWrap(ITcpClientFSMCtx ctx) {
             Debug.LogFormat("[TcpClientStateBase] Enter state \"{0}\"", GetType().Name);
             OnEnter(ctx);
         }
 
-        public void OnExitWrap(ITcpClientFSMCtx ctx) {
+        internal void OnExitWrap(ITcpClientFSMCtx ctx) {
             Debug.LogFormat("[TcpClientStateBase] Exit state \"{0}\"", GetType().Name);
             OnExit(ctx);
         }

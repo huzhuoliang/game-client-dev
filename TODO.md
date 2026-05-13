@@ -15,9 +15,10 @@
 | `Connecting` | 真实实现（成功 → `Connected`，失败/TLS/重试耗尽 → `Disconnected`，OCE → `null`） |
 | `Connected` | 薄壳（~15 行）：调 `ctx.RunMessagePump(ct)`，OCE 透传，其他异常 → `Disconnecting` |
 | `Disconnecting` | 真实现：调 `ctx.CloseConnection()` 关 socket，转 `Disconnected` |
-| `Handshaking` / `Disconnected` | 占位（`await UniTask.Yield()`） |
-| `Closed` | 已删除（T1.2，没人转过去；`Disconnected` 返 null 已足够终止 FSM） |
-| `Reconnecting` / `Ready` | 已删除（YAGNI） |
+| `Disconnected` | 占位（`await UniTask.Yield(); return null;` → FSM 终止） |
+| `Closed` / `Handshaking` | 已删除（T1.2 / T1.3，没人转过去 YAGNI） |
+| `Reconnecting` / `Ready` | 已删除（早期 YAGNI 决定） |
+| `ETcpState` 枚举 | 引擎对外仅暴露此 enum（T1.3）；state 类内部协议三方法已降 internal |
 | `Net.Legacy.GameTcpClient` 老代码 | 已挪到 `Net/Legacy/` 文件夹 + `Net.Legacy` namespace；`Net.Mono.GameClient` 仍引用，与新模块并行，将来另行替换 |
 
 ---
@@ -39,11 +40,11 @@
 
 | 缺什么 | 当前症状 |
 |---|---|
-| `Disconnecting` 状态没真实现 | `await UniTask.Yield(); return null;` 占位；socket / stream 实际清理仅靠 ctx.Dispose 兜底 |
-| `Mono.OnDisable` 没 dispose ctx | `TcpClient` / `SslStream` / `SemaphoreSlim` / `RingBufferStream` 全部 leak |
+| ~~`Disconnecting` 状态没真实现~~ | 已修（T1.1） |
+| ~~`Mono.OnDisable` 没 dispose ctx~~ | 已修（T1.1：OnDisable 软中断 + OnDestroy dispose） |
 | ~~`Closed` 状态没人转过去~~ | 已删（T1.2） |
-| 状态观察 API 缺位 | 外部代码无法问"当前哪状态"或订阅状态变化；只有 `OnConnectFailed` |
-| `Mono` 缺公开 `Connect()` / `Disconnect()` / `IsConnected` | 只能 `OnEnable` 自动起；调用方没法手动控制 |
+| ~~状态观察 API 缺位~~ | 已加（T1.3：`ETcpState CurrentState` + `OnStateChanged` enum 事件） |
+| `Mono` 缺公开 `Connect()` / `Disconnect()` / `IsConnected` | 只能 `OnEnable` 自动起；调用方没法手动控制（T1.4 待办） |
 
 **模块化卫生**（asmdef 拆分时会撞）：
 
@@ -158,15 +159,76 @@ protected override async UniTask<TcpClientStateBase> RunAsyncInternal(ITcpClient
 
 **工作量**：rm
 
-#### T1.3 — 引擎层暴露状态观察
+#### T1.3 — ✅ 引擎层暴露状态观察（2026-05-12 落地，enum 化方案）
 
-**文件**：`TcpClientStateMachine.cs`
+**设计取舍**：最初版本 `CurrentState` 返回 `TcpClientStateBase`，但 review 发现这会把 `RunAsync` / `OnEnterWrap` / `OnExitWrap` 这些**引擎-state 内部协议**方法泄漏给外部。改用 **enum + 内部协议下沉 internal** 的方案。
 
-- 加 `public TcpClientStateBase CurrentState => _state;`
-- 加 `public event Action<TcpClientStateBase, TcpClientStateBase> OnStateChanged;`（`(prev, next)`）
-- `StartAsync` 状态切换处 fire 事件
+**新增 enum** `Net.Tcp.ETcpState`（`Assets/Scripts/Net/Tcp/ETcpState.cs`）：
 
-**工作量**：~10 行
+```csharp
+public enum ETcpState {
+    None,          // FSM 未启动 / 已退出
+    Init,
+    Connecting,
+    Connected,
+    Disconnecting,
+    Disconnected,
+}
+```
+
+**`TcpClientStateBase` 改动**：
+
+- 加 `public abstract ETcpState Kind { get; }`——每个子类必须返回自己的枚举身份，编译器强制
+- `RunAsync` / `OnEnterWrap` / `OnExitWrap` 三方法由 `public` 降 `internal`——仅 `TcpClientStateMachine` 引擎能调，外部代码即使拿到 state 实例也调不到
+
+**5 个 state 子类**（Init / Connecting / Connected / Disconnecting / Disconnected）各加一行：
+
+```csharp
+public override ETcpState Kind => ETcpState.Connecting;   // 以 Connecting 为例
+```
+
+**顺手删 `Handshaking` 状态**——本来就是占位 stub，没人转过去；删了不影响实际可达路径，将来真有业务握手需求再起更具名状态（如 `Authenticating`）。
+
+**`TcpClientStateMachine` 引擎层**：
+
+```csharp
+public ETcpState CurrentState => _state?.Kind ?? ETcpState.None;
+public event Action<ETcpState, ETcpState> OnStateChanged;
+
+private void SetState(TcpClientStateBase next) {
+    ETcpState prevKind = CurrentState;
+    _state = next;
+    ETcpState nextKind = CurrentState;
+    if (prevKind != nextKind) {
+        OnStateChanged?.Invoke(prevKind, nextKind);
+    }
+}
+```
+
+`StartAsync` 三处状态变动统一走 `SetState`：初始 `(None, init)`、正常 `(prev, next)`、异常/OCE 退出 `(prev, None)`。
+
+**外部使用**：
+
+```csharp
+// 类型检查（替代 state is Connected）
+if (mono.StateMachine.CurrentState == ETcpState.Connected) { ... }
+
+// 订阅状态变化（参数仅暴露 enum）
+mono.StateMachine.OnStateChanged += (prev, next) => {
+    if (next == ETcpState.Connected) ShowOnline();
+    if (next == ETcpState.Disconnected && prev == ETcpState.Connected) {
+        ShowLostConnection();
+    }
+};
+```
+
+**收益**：
+
+1. 外部 API 干净到位，零反射、零 `is` 检查
+2. `TcpClientStateBase` 三个内部方法标 internal 后**真的对外不可调**（asmdef 拆完后跨 asmdef 不可见）——T1.6 "internal/public 边界复盘"部分提前完成
+3. 状态类对外完全成为"实现细节"，将来重命名 / 重构 state 类不影响外部消费者
+
+**工作量**：~80 行（含 enum 文件 + base 改动 + 5 个子类一行 + 引擎改 + Handshaking 删除）
 
 #### T1.4 — `Mono` 加公开 `Connect()` / `Disconnect()` / `IsConnected` / `OnStateChanged`
 
@@ -195,25 +257,26 @@ protected override async UniTask<TcpClientStateBase> RunAsyncInternal(ITcpClient
 
 #### T1.6 — internal vs public 边界复盘（为 asmdef 拆分铺路）
 
-走一遍模块所有类，标注真正"模块外"用得到的 vs 只是"实现细节"。当前 asmdef 还没拆，但提前把访问修饰符摆对，将来拆 asmdef 几乎零工作量：
+**已完成部分**（随 T1.3 enum 化方案一起做）：
 
-候选 internal（外部不需要）：
-- `TcpClientStateBase` 各 state 子类（`Init` / `Connecting` / `Connected` / `Disconnecting` / `Disconnected` / `Handshaking`）——外部只通过 Mono / 引擎接触状态，不直接 new
-- `TcpClientFSMCtx`（concrete）——外部应通过 `ITcpClientFSMCtx` 接口
-- `TcpClientStateMachine`（engine）——外部通过 Mono 控制
-- `MessageHandlerWrapper`（implementation detail）
+- ✅ `TcpClientStateBase.RunAsync` / `OnEnterWrap` / `OnExitWrap` 三方法降 `internal`——引擎-state 内部协议不再对外可见
+- ✅ enum 化后，**外部完全不需要 `TcpClientStateBase` 类型**——只通过 `ETcpState` 枚举观察状态。这让 state 子类（`Init` / `Connecting` / `Connected` / `Disconnecting` / `Disconnected`）和 `TcpClientStateBase` 在 asmdef 拆分时可直接全部标 `internal`，外部零感知
 
-保留 public（模块对外 API）：
-- `TcpClientStateMachineMono`（Mono entry）
-- `ITcpClientFSMCtx`（接口）
-- `TcpClientStateBase`（abstract base，`CurrentState` 类型 + `OnStateChanged` 事件参数类型）
-- `IMessageHandler<T>` / `MessageHandlerRegistry`（应用层注册 handler 的入口）
-- `ConnectErrorKind`（事件参数）
-- `RingBufferStream`（如果将来要让外部 push/pop——多半不需要，可设 internal）
+**剩余待做**（asmdef 拆分前补完）：
 
-**注**：当前还在同 asmdef 里，public/internal 行为差异不可见；这步是 prep work，做完后将来拆 asmdef 时一行 asmdef 文件搞定。
+- 状态子类 + `TcpClientStateBase` 改 `internal`（当前仍 `public`，asmdef 拆分前做都行）
+- `TcpClientFSMCtx`（concrete）→ `internal`，外部用 `ITcpClientFSMCtx` 接口
+- `TcpClientStateMachine`（engine）→ 保留 `public`（Mono.StateMachine getter 要返回这个）或者藏在 Mono 后面
+- `MessageHandlerWrapper` / `IMessageHandlerWrapper` → `internal`
+- `RingBufferStream` / `BitConverterExtension` → `internal`
 
-**工作量**：~10 个类的访问修饰符改动 + 一遍 grep 确认外部消费者
+**保留 public（模块对外 API）**：
+- `TcpClientStateMachineMono`
+- `ITcpClientFSMCtx`
+- `ETcpState` / `ConnectErrorKind`
+- `IMessageHandler<T>` / `MessageHandlerRegistry`
+
+**注**：当前还在同 asmdef 里，public/internal 行为差异不可见；剩余动作是 prep work，做完后将来拆 asmdef 一行 asmdef 文件搞定。
 
 #### T1.7 — 模块入口文档
 

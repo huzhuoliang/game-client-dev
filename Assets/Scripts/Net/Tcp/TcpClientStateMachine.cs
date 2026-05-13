@@ -10,6 +10,19 @@ namespace Net.Tcp {
 
         private TcpClientStateBase _state;
 
+        /// <summary>
+        /// 当前所处状态的枚举身份。FSM 未启动 / 已退出时为 <see cref="ETcpState.None"/>。
+        /// 外部代码用 <c>== ETcpState.Connected</c> 之类的判断阶段，不直接接触 state 类。
+        /// </summary>
+        public ETcpState CurrentState => _state?.Kind ?? ETcpState.None;
+
+        /// <summary>
+        /// 状态切换时触发，参数 <c>(prev, next)</c>。
+        /// FSM 启动时 prev = <see cref="ETcpState.None"/>；FSM 退出（含异常 / 取消 / null 返回）时 next = <see cref="ETcpState.None"/>。
+        /// 触发时机：在 prev 的 OnExit 之后、next 的 OnEnter 之前；即"prev 已退出，next 尚未进入"的过渡瞬间。
+        /// </summary>
+        public event Action<ETcpState, ETcpState> OnStateChanged;
+
         public TcpClientStateMachine(ITcpClientFSMCtx context) {
             _context = context;
         }
@@ -19,7 +32,7 @@ namespace Net.Tcp {
         }
 
         public async UniTask StartAsync(TcpClientStateBase initState, CancellationToken token = default) {
-            _state = initState;
+            SetState(initState);   // (None, initState.Kind)
             while (_state != null) {
                 TcpClientStateBase next;
                 try {
@@ -32,12 +45,23 @@ namespace Net.Tcp {
                     }
                 } catch (OperationCanceledException) {
                     // 取消是正常退出路径
+                    SetState(null);   // (prev, None) 通知订阅方 FSM 退出
                     return;
                 } catch (Exception e) {
                     Debug.LogErrorFormat("TcpClientState \"{0}\" run error.\n{1}", _state.GetType().Name, e);
+                    SetState(null);   // (prev, None) 通知订阅方 FSM 因错误退出
                     return;
                 }
-                _state = next;
+                SetState(next);   // (prev, next.Kind) 正常转移；next 为 null 时也通知，循环条件会让 while 退出
+            }
+        }
+
+        private void SetState(TcpClientStateBase next) {
+            ETcpState prevKind = CurrentState;
+            _state = next;
+            ETcpState nextKind = CurrentState;
+            if (prevKind != nextKind) {
+                OnStateChanged?.Invoke(prevKind, nextKind);
             }
         }
     }

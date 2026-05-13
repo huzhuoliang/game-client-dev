@@ -6,6 +6,7 @@ using UnityEngine;
 namespace Net.Tcp.State {
     // ReSharper disable once ClassNeverInstantiated.Global
     public sealed class Connected : TcpClientStateBase {
+        public override ETcpState Kind => ETcpState.Connected;
         private Connected() { }
 
         protected override async UniTask<TcpClientStateBase> RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct = default) {

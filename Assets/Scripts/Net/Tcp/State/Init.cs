@@ -7,6 +7,7 @@ using Cysharp.Threading.Tasks;
 namespace Net.Tcp.State {
     // ReSharper disable once ClassNeverInstantiated.Global
     public sealed class Init : TcpClientStateBase {
+        public override ETcpState Kind => ETcpState.Init;
         private Init() { }
 
         protected override UniTask<TcpClientStateBase> RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct = default) {

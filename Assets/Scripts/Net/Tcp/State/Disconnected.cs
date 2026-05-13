@@ -4,6 +4,7 @@ using Cysharp.Threading.Tasks;
 namespace Net.Tcp.State {
     // ReSharper disable once ClassNeverInstantiated.Global
     public sealed class Disconnected : TcpClientStateBase {
+        public override ETcpState Kind => ETcpState.Disconnected;
         private Disconnected() { }
 
         protected override async UniTask<TcpClientStateBase> RunAsyncInternal(ITcpClientFSMCtx ctx, CancellationToken ct = default) {
